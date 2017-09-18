@@ -27,9 +27,18 @@ int number_of_nodes(mpc_ast_t *ast) {
 }
 
 
-int evaluate_tree(mpc_ast_t *ast) {
-  return 0;
+int eval_exp(mpc_ast_t *ast) {
+  printf(ast->tag);
+  if (strstr(ast->tag, "num")) {
+    return atoi(ast->contents);
+  }
+  int sum = 0;
+  for (int i = 2; i < ast->children_num - 1; i++) {
+    sum += eval_exp(ast->children[i]);
+  }
+  return sum;
 }
+
 
 int main (int argc, char **argv) {
 
@@ -46,7 +55,7 @@ exp: <num> | '(' <op> <exp>* ')' ;   \
 input: /^/ <op> <exp>+ /$/ ;    \
 ", Op, Num, Exp, Input);
 
- run_repl(Input);
+  run_repl(Input);
 
   mpc_cleanup(4, Num, Op, Exp, Input);
   return 0;
@@ -60,7 +69,6 @@ void parse_input(char *line, mpc_parser_t *Input) {
 
     mpc_ast_t* a = r.output;
 
-    print_tree(a);
     // printf("%d\n", number_of_nodes(a));
 
     /* int i; */
@@ -69,8 +77,9 @@ void parse_input(char *line, mpc_parser_t *Input) {
     /*   printf("tag: %s\ncontents: %s\n\n", child->tag, child->contents); */
     /* } */
 
-    mpc_ast_print(r.output);
-    mpc_ast_delete(r.output);
+    /* mpc_ast_print(r.output); */
+    /* mpc_ast_delete(r.output); */
+    printf("evalled: %d\n", eval_exp(r.output));
   } else {
     mpc_err_print(r.error);
     mpc_err_delete(r.error);
