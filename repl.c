@@ -2,17 +2,19 @@
 A well-behaved REPL
 */
 
-#include "mpc/mpc.h"
+#include "../mpc/mpc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <readline/readline.h>
-#include <readline/history.h>
+/* #include <readline/readline.h> */
+/* #include <readline/history.h> */
 
 
 void run_repl(mpc_parser_t *Input);
 void parse_input(char *line, mpc_parser_t *Input);
+int evaluate_tree(mpc_ast_t *ast);
+
 
 int number_of_nodes(mpc_ast_t *ast) {
   if (ast->children_num == 0)
@@ -24,13 +26,9 @@ int number_of_nodes(mpc_ast_t *ast) {
   return sum;
 }
 
-void print_tree(mpc_ast_t *ast) {
-  if (ast != NULL) {
-    printf("%s\n", ast->tag);
-    for (int i = 0; i < ast->children_num; i++) {
-      print_tree(ast->children[i]);
-    }
-  }
+
+int evaluate_tree(mpc_ast_t *ast) {
+  return 0;
 }
 
 int main (int argc, char **argv) {
@@ -42,7 +40,7 @@ int main (int argc, char **argv) {
 
   // Prefix Notation
   mpca_lang(MPCA_LANG_DEFAULT," \
-op: '+' | '-' | '/' | '*' | '%' ;             \
+op: '+' ; \
 num: /-?[0-9]+/ ;                    \
 exp: <num> | '(' <op> <exp>* ')' ;   \
 input: /^/ <op> <exp>+ /$/ ;    \
@@ -62,8 +60,8 @@ void parse_input(char *line, mpc_parser_t *Input) {
 
     mpc_ast_t* a = r.output;
 
-    // print_tree(a);
-    printf("%d\n", number_of_nodes(a));
+    print_tree(a);
+    // printf("%d\n", number_of_nodes(a));
 
     /* int i; */
     /* for (i = 0; i < a->children_num; i++) { */
@@ -71,8 +69,8 @@ void parse_input(char *line, mpc_parser_t *Input) {
     /*   printf("tag: %s\ncontents: %s\n\n", child->tag, child->contents); */
     /* } */
 
-    /* mpc_ast_print(r.output); */
-    /* mpc_ast_delete(r.output); */
+    mpc_ast_print(r.output);
+    mpc_ast_delete(r.output);
   } else {
     mpc_err_print(r.error);
     mpc_err_delete(r.error);
@@ -80,15 +78,30 @@ void parse_input(char *line, mpc_parser_t *Input) {
 }
 
 
+/* void run_repl(mpc_parser_t *Input) { */
+/*   char *line; */
+
+/*   puts( "MZLisp v0.01"); */
+/*   puts( "C-c to exit"); */
+/*   while ((line = readline("MZL> ")) != NULL) { */
+/*     parse_input(line, Input); */
+/*     add_history(line); */
+/*     free(line); */
+/*   } */
+/*   putchar('\n'); */
+/* } */
+
+
 void run_repl(mpc_parser_t *Input) {
   char *line;
 
   puts( "MZLisp v0.01");
   puts( "C-c to exit");
-  while ((line = readline("MZL> ")) != NULL) {
+
+  while (1) {
+    printf("MZL> ");
+    line = gets(line);
     parse_input(line, Input);
-    add_history(line);
-    free(line);
   }
   putchar('\n');
 }
