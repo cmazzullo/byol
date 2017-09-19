@@ -10,6 +10,7 @@ A well-behaved REPL
 /* #include <readline/readline.h> */
 /* #include <readline/history.h> */
 
+#define MAXLINE 1024
 
 void run_repl(mpc_parser_t *Input);
 void parse_input(char *line, mpc_parser_t *Input);
@@ -32,11 +33,13 @@ int eval_exp(mpc_ast_t *ast) {
   if (strstr(ast->tag, "num")) {
     return atoi(ast->contents);
   }
-  int sum = 0;
+  int result = 0;
   for (int i = 2; i < ast->children_num - 1; i++) {
-    sum += eval_exp(ast->children[i]);
+    if (strstr(ast->contents, "+")) {
+	result += eval_exp(ast->children[i]);
+      }
   }
-  return sum;
+  return result;
 }
 
 
@@ -49,7 +52,7 @@ int main (int argc, char **argv) {
 
   // Prefix Notation
   mpca_lang(MPCA_LANG_DEFAULT," \
-op: '+' ; \
+op: '+' | '-' ; \
 num: /-?[0-9]+/ ;                    \
 exp: <num> | '(' <op> <exp>* ')' ;   \
 input: /^/ <op> <exp>+ /$/ ;    \
@@ -102,15 +105,16 @@ void parse_input(char *line, mpc_parser_t *Input) {
 
 
 void run_repl(mpc_parser_t *Input) {
-  char *line;
-
+  char *line = malloc(MAXLINE * sizeof (char));
   puts( "MZLisp v0.01");
   puts( "C-c to exit");
 
   while (1) {
     printf("MZL> ");
-    line = gets(line);
+    fgets(line, MAXLINE, stdin);
     parse_input(line, Input);
   }
+
   putchar('\n');
+  free(line);
 }
