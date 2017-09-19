@@ -28,17 +28,30 @@ int number_of_nodes(mpc_ast_t *ast) {
 }
 
 
-int eval_exp(mpc_ast_t *ast) {
-  printf(ast->tag);
-  if (strstr(ast->tag, "num")) {
-    return atoi(ast->contents);
+int eval(mpc_ast_t *t) {
+  if (strstr(t->tag, "num")) {
+    return atoi(t->contents);
   }
-  int result = 0;
-  for (int i = 2; i < ast->children_num - 1; i++) {
-    if (strstr(ast->contents, "+")) {
-	result += eval_exp(ast->children[i]);
-      }
+
+  char *op = t->children[1]->contents;
+
+  int result;
+  if (strstr(op, "+")){
+    result = 0;
+    for (int i = 2; i < t->children_num - 1; i++) {
+      result += eval(t->children[i]);
+    }
+  } else if (strstr(op, "*")){
+    result = 1;
+    for (int i = 2; i < t->children_num - 1; i++) {
+      result *= eval(t->children[i]);
+    }
+  } else if (strstr(op, "/")) { // make division binary
+    result = eval(t->children[2]) / eval(t->children[3]);
+  } else if (strstr(op, "-")) { // this too
+    result = eval(t->children[2]) - eval(t->children[3]);
   }
+
   return result;
 }
 
@@ -52,7 +65,7 @@ int main (int argc, char **argv) {
 
   // Prefix Notation
   mpca_lang(MPCA_LANG_DEFAULT," \
-op: '+' | '-' ; \
+op: '+' | '-' | '*' ; \
 num: /-?[0-9]+/ ;                    \
 exp: <num> | '(' <op> <exp>* ')' ;   \
 input: /^/ <op> <exp>+ /$/ ;    \
@@ -82,7 +95,7 @@ void parse_input(char *line, mpc_parser_t *Input) {
 
     /* mpc_ast_print(r.output); */
     /* mpc_ast_delete(r.output); */
-    printf("evalled: %d\n", eval_exp(r.output));
+    printf("evalled: %d\n", eval(r.output));
   } else {
     mpc_err_print(r.error);
     mpc_err_delete(r.error);
@@ -106,8 +119,6 @@ void parse_input(char *line, mpc_parser_t *Input) {
 
 void run_repl(mpc_parser_t *Input) {
   char *line = malloc(MAXLINE * sizeof (char));
-  puts( "MZLisp v0.01");
-  puts( "C-c to exit");
 
   while (1) {
     printf("MZL> ");
