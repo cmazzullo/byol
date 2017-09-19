@@ -21,8 +21,6 @@ typedef struct { // lisp value
 
 
 // Function prototypes
-void run_repl(mpc_parser_t *Input);
-void parse_input(char *line, mpc_parser_t *Input);
 int eval(mpc_ast_t *t);
 int eval_op(int x, char *op, int y);
 lval lval_num(int x);
@@ -51,10 +49,16 @@ lval lval_err(int x) { // create new error
 
 
 void print_lval(lval v) {
+  switch (v.type) {
+  case LVAL_NUM: printf("%d", v.num); break;
 
+  case LVAL_ERR:
+    if (v.err == LERR_DIV_ZERO) printf("ERROR: Division by zero");
+    if (v.err == LERR_BAD_OP) printf("ERROR: Invalid operator");
+    if (v.err == LERR_BAD_NUM) printf("ERROR: Invalid number");
+    break;
+  }
 }
-
-
 
 
 int eval(mpc_ast_t *t) {
@@ -72,6 +76,7 @@ int eval(mpc_ast_t *t) {
   return x;
 }
 
+
 int eval_op(int x, char *op, int y) {
   if (strstr(op, "+")) return x + y;
   if (strstr(op, "*")) return x * y;
@@ -81,7 +86,7 @@ int eval_op(int x, char *op, int y) {
 }
 
 int main (int argc, char **argv) {
-
+  char *line = malloc(MAXLINE * sizeof (char));
   mpc_parser_t *Num = mpc_new("num");
   mpc_parser_t *Op = mpc_new("op");
   mpc_parser_t *Exp = mpc_new("exp");
@@ -89,46 +94,32 @@ int main (int argc, char **argv) {
 
   // Prefix Notation
   mpca_lang(MPCA_LANG_DEFAULT," \
-op: '+' | '-' | '*' | '/' ; \
-num: /-?[0-9]+/ ;                    \
-exp: <num> | '(' <op> <exp>* ')' ;   \
-input: /^/ <op> <exp>+ /$/ ;    \
-", Op, Num, Exp, Input);
+  op: '+' | '-' | '*' | '/' ; \
+  num: /-?[0-9]+/ ;                    \
+  exp: <num> | '(' <op> <exp>* ')' ;   \
+  input: /^/ <op> <exp>+ /$/ ;    \
+  ", Op, Num, Exp, Input);
 
-  run_repl(Input);
-
-  mpc_cleanup(4, Num, Op, Exp, Input);
-  return 0;
-}
-
-
-void parse_input(char *line, mpc_parser_t *Input) {
   mpc_result_t r;
-
-  if (mpc_parse("<stdin>", line, Input, &r)) {
-    printf("%d\n", eval(r.output));
-    mpc_ast_delete(r.output);
-  } else {
-    mpc_err_print(r.error);
-    mpc_err_delete(r.error);
-  }
-}
-
-void run_repl(mpc_parser_t *Input) {
-
-  char *line = malloc(MAXLINE * sizeof (char));
 
   while (1) {
     printf("> ");
     fgets(line, MAXLINE, stdin);
-    parse_input(line, Input);
+
+    if (mpc_parse("<stdin>", line, Input, &r)) {
+      printf("%d\n", eval(r.output));
+      mpc_ast_delete(r.output);
+    } else { // catch syntax errors here
+      mpc_err_print(r.error);
+      mpc_err_delete(r.error);
+    }
   }
 
+  mpc_cleanup(4, Num, Op, Exp, Input);
   putchar('\n');
   free(line);
+  return 0;
 }
-
-
 
 /* void run_repl(mpc_parser_t *Input) { */
 /*   char *line; */
