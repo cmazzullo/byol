@@ -2,8 +2,7 @@
 A well-behaved REPL
 */
 
-#include "../mpc/mpc.h"
-
+#include "mpc/mpc.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -12,49 +11,74 @@ A well-behaved REPL
 
 #define MAXLINE 1024
 
+
+// Structs
+typedef struct { // lisp value
+  int type;
+  int num;
+  int err;
+} lval;
+
+
+// Function prototypes
 void run_repl(mpc_parser_t *Input);
 void parse_input(char *line, mpc_parser_t *Input);
-int evaluate_tree(mpc_ast_t *ast);
+int eval(mpc_ast_t *t);
+int eval_op(int x, char *op, int y);
+lval lval_num(int x);
+lval lval_err(int x);
+void print_lval(lval v);
+
+// Enums
+enum { LVAL_NUM, LVAL_ERR }; // values
+enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM }; // errors
 
 
-int number_of_nodes(mpc_ast_t *ast) {
-  if (ast->children_num == 0)
-    return 1;
-  int sum = 0;
-  for (int i = 0; i < ast->children_num; i++) {
-    sum += number_of_nodes(ast->children[i]);
-  }
-  return sum;
+lval lval_num(int x) { // create new lisp value
+  lval v;
+  v.type = LVAL_NUM;
+  v.num = x;
+  return v;
 }
+
+
+lval lval_err(int x) { // create new error
+  lval v;
+  v.type = LVAL_ERR;
+  v.err = x;
+  return v;
+}
+
+
+void print_lval(lval v) {
+
+}
+
+
 
 
 int eval(mpc_ast_t *t) {
-  if (strstr(t->tag, "num")) {
+  if (strstr(t->tag, "num"))
     return atoi(t->contents);
-  }
 
   char *op = t->children[1]->contents;
 
-  int result;
-  if (strstr(op, "+")){
-    result = 0;
-    for (int i = 2; i < t->children_num - 1; i++) {
-      result += eval(t->children[i]);
-    }
-  } else if (strstr(op, "*")){
-    result = 1;
-    for (int i = 2; i < t->children_num - 1; i++) {
-      result *= eval(t->children[i]);
-    }
-  } else if (strstr(op, "/")) { // make division binary
-    result = eval(t->children[2]) / eval(t->children[3]);
-  } else if (strstr(op, "-")) { // this too
-    result = eval(t->children[2]) - eval(t->children[3]);
-  }
+  int x = eval(t->children[2]); // store first arg's value
 
-  return result;
+  // iterate through the rest of the children
+  for (int i = 3; strstr(t->children[i]->tag, "exp"); i++){
+    x = eval_op(x, op, eval(t->children[i]));
+  }
+  return x;
 }
 
+int eval_op(int x, char *op, int y) {
+  if (strstr(op, "+")) return x + y;
+  if (strstr(op, "*")) return x * y;
+  if (strstr(op, "-")) return x - y;
+  if (strstr(op, "/")) return x / y;
+  return 0;
+}
 
 int main (int argc, char **argv) {
 
@@ -65,7 +89,7 @@ int main (int argc, char **argv) {
 
   // Prefix Notation
   mpca_lang(MPCA_LANG_DEFAULT," \
-op: '+' | '-' | '*' ; \
+op: '+' | '-' | '*' | '/' ; \
 num: /-?[0-9]+/ ;                    \
 exp: <num> | '(' <op> <exp>* ')' ;   \
 input: /^/ <op> <exp>+ /$/ ;    \
@@ -82,25 +106,28 @@ void parse_input(char *line, mpc_parser_t *Input) {
   mpc_result_t r;
 
   if (mpc_parse("<stdin>", line, Input, &r)) {
-
-    mpc_ast_t* a = r.output;
-
-    // printf("%d\n", number_of_nodes(a));
-
-    /* int i; */
-    /* for (i = 0; i < a->children_num; i++) { */
-    /*   mpc_ast_t *child = a->children[i]; */
-    /*   printf("tag: %s\ncontents: %s\n\n", child->tag, child->contents); */
-    /* } */
-
-    /* mpc_ast_print(r.output); */
-    /* mpc_ast_delete(r.output); */
-    printf("evalled: %d\n", eval(r.output));
+    printf("%d\n", eval(r.output));
+    mpc_ast_delete(r.output);
   } else {
     mpc_err_print(r.error);
     mpc_err_delete(r.error);
   }
 }
+
+void run_repl(mpc_parser_t *Input) {
+
+  char *line = malloc(MAXLINE * sizeof (char));
+
+  while (1) {
+    printf("> ");
+    fgets(line, MAXLINE, stdin);
+    parse_input(line, Input);
+  }
+
+  putchar('\n');
+  free(line);
+}
+
 
 
 /* void run_repl(mpc_parser_t *Input) { */
@@ -115,17 +142,3 @@ void parse_input(char *line, mpc_parser_t *Input) {
 /*   } */
 /*   putchar('\n'); */
 /* } */
-
-
-void run_repl(mpc_parser_t *Input) {
-  char *line = malloc(MAXLINE * sizeof (char));
-
-  while (1) {
-    printf("MZL> ");
-    fgets(line, MAXLINE, stdin);
-    parse_input(line, Input);
-  }
-
-  putchar('\n');
-  free(line);
-}
