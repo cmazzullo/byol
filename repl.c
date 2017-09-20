@@ -15,24 +15,26 @@ A well-behaved REPL
 // Structs
 typedef struct { // lisp value
   int type;
-  int num;
+  long num;
   int err;
 } lval;
 
 
 // Function prototypes
-int eval(mpc_ast_t *t);
-int eval_op(int x, char *op, int y);
-lval lval_num(int x);
-lval lval_err(int x);
+lval eval(mpc_ast_t *t);
+lval eval_op(lval x, char *op, lval y);
+lval lval_num(long x);
+lval lval_err(long x);
 void print_lval(lval v);
+void println_lval(lval v);
+
 
 // Enums
 enum { LVAL_NUM, LVAL_ERR }; // values
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM }; // errors
 
 
-lval lval_num(int x) { // create new lisp value
+lval lval_num(long x) { // create new lisp value
   lval v;
   v.type = LVAL_NUM;
   v.num = x;
@@ -40,7 +42,7 @@ lval lval_num(int x) { // create new lisp value
 }
 
 
-lval lval_err(int x) { // create new error
+lval lval_err(long x) { // create new error
   lval v;
   v.type = LVAL_ERR;
   v.err = x;
@@ -50,7 +52,7 @@ lval lval_err(int x) { // create new error
 
 void print_lval(lval v) {
   switch (v.type) {
-  case LVAL_NUM: printf("%d", v.num); break;
+  case LVAL_NUM: printf("%li", v.num); break;
 
   case LVAL_ERR:
     if (v.err == LERR_DIV_ZERO) printf("ERROR: Division by zero");
@@ -60,15 +62,18 @@ void print_lval(lval v) {
   }
 }
 
+void println_lval(lval v) { print_lval(v); putchar('\n'); }
 
-int eval(mpc_ast_t *t) {
-  if (strstr(t->tag, "num"))
-    return atoi(t->contents);
+
+lval eval(mpc_ast_t *t) {
+  if (strstr(t->tag, "num")) {
+    long x = strtol(t->contents, NULL, 10);
+    if (errno != ERANGE) return lval_num(x);
+    else return lval_err(LERR_BAD_NUM);
+  }
 
   char *op = t->children[1]->contents;
-
-  int x = eval(t->children[2]); // store first arg's value
-
+  lval x = eval(t->children[2]); // store first arg's value
   // iterate through the rest of the children
   for (int i = 3; strstr(t->children[i]->tag, "exp"); i++){
     x = eval_op(x, op, eval(t->children[i]));
@@ -77,13 +82,22 @@ int eval(mpc_ast_t *t) {
 }
 
 
-int eval_op(int x, char *op, int y) {
-  if (strstr(op, "+")) return x + y;
-  if (strstr(op, "*")) return x * y;
-  if (strstr(op, "-")) return x - y;
-  if (strstr(op, "/")) return x / y;
-  return 0;
+lval eval_op(lval x, char *op, lval y) {
+  if (x.type == LVAL_ERR) { return x; }
+  if (y.type == LVAL_ERR) { return y; }
+  else {
+    if (strstr(op, "+")) return lval_num(x.num + y.num);
+    if (strstr(op, "*")) return lval_num(x.num * y.num);
+    if (strstr(op, "-")) return lval_num(x.num - y.num);
+    if (strstr(op, "/")) {
+      if (y.num == 0) {
+	return lval_err(LERR_DIV_ZERO);
+      } else { return lval_num(x.num / y.num); }
+    }
+  }
+  return lval_err(LERR_BAD_OP);
 }
+
 
 int main (int argc, char **argv) {
   char *line = malloc(MAXLINE * sizeof (char));
@@ -93,12 +107,10 @@ int main (int argc, char **argv) {
   mpc_parser_t *Input = mpc_new("input");
 
   // Prefix Notation
-  mpca_lang(MPCA_LANG_DEFAULT," \
-  op: '+' | '-' | '*' | '/' ; \
-  num: /-?[0-9]+/ ;                    \
+  mpca_lang(MPCA_LANG_DEFAULT,"op: '+' | '-' | '*' | '/' | '%' ; \
+  num: /-?[0-9]+/ ; \
   exp: <num> | '(' <op> <exp>* ')' ;   \
-  input: /^/ <op> <exp>+ /$/ ;    \
-  ", Op, Num, Exp, Input);
+  input: /^/ <op> <exp>+ /$/ ;", Op, Num, Exp, Input);
 
   mpc_result_t r;
 
@@ -107,7 +119,8 @@ int main (int argc, char **argv) {
     fgets(line, MAXLINE, stdin);
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
-      printf("%d\n", eval(r.output));
+      println_lval(eval(r.output));
+      // mpc_ast_print(r.output);
       mpc_ast_delete(r.output);
     } else { // catch syntax errors here
       mpc_err_print(r.error);
@@ -115,7 +128,7 @@ int main (int argc, char **argv) {
     }
   }
 
-  mpc_cleanup(4, Num, Op, Exp, Input);
+  mpc_cleanup(4, Op, Num, Exp, Input);
   putchar('\n');
   free(line);
   return 0;
