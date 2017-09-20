@@ -133,16 +133,3 @@ int main (int argc, char **argv) {
   free(line);
   return 0;
 }
-
-/* void run_repl(mpc_parser_t *Input) { */
-/*   char *line; */
-
-/*   puts( "MZLisp v0.01"); */
-/*   puts( "C-c to exit"); */
-/*   while ((line = readline("MZL> ")) != NULL) { */
-/*     parse_input(line, Input); */
-/*     add_history(line); */
-/*     free(line); */
-/*   } */
-/*   putchar('\n'); */
-/* } */
