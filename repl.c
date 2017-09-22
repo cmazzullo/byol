@@ -19,8 +19,8 @@ typedef struct { // lisp value
 } lval;
 
 // Function prototypes
-lval *eval(mpc_ast_t *t);
-lval *eval_op(lval *x, char *op, lval *y);
+lval *eval(lval *v);
+lval *eval_op(lval *x, lval *op, lval *y);
 lval *lval_num(long x);
 lval *lval_sym(char *sym);
 lval *lval_sexp(void);
@@ -28,7 +28,10 @@ lval *lval_err(char *err);
 void print_lval(lval *v);
 void println_lval(lval *v);
 void lval_del(lval *v);
-
+lval *lval_read_num(mpc_ast_t *t);
+lval *lval_read_sym(mpc_ast_t *t);
+lval *lval_add(lval *v, lval *x);
+lval *apply(lval *fn, int argc, lval **args);
 // Enums
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP }; // values
 
@@ -78,7 +81,7 @@ print_lval(lval *v)
   case LVAL_NUM: printf("%li", v->num); break;
   case LVAL_ERR: puts(v->err); break;
   case LVAL_SYM: puts(v->sym); break;
-  case LVAL_SEXP:puts("sexp");
+  case LVAL_SEXP: puts("sexp"); // TODO
   }
 }
 
@@ -86,31 +89,36 @@ void
 println_lval(lval *v) { print_lval(v); putchar('\n'); }
 
 lval *
-eval(mpc_ast_t *t)
+eval(lval *v)
 {
-  else if (strstr(t->tag, "sym")) {
+  if (v->type == LVAL_SEXP) {
+    return apply(v->cell[0], v->count - 1, &(v->cell[1]));
   }
-  else { // sexp case
-    char *op = t->children[1]->contents;
-    lval *v = eval(t->children[2]); // store first arg's value
-    // iterate through the rest of the children
-    for (int i = 3; strstr(t->children[i]->tag, "exp"); i++){
-      v = eval_op(v, op, eval(t->children[i]));
-    }
   return v;
-  }
 }
 
 lval *
-eval_op(lval *x, char *op, lval *y)
+apply(lval *fn, int argc, lval **args)
 {
+  lval *x = args[0];
+  for (int i = 1; i < argc; i++) {
+    x = eval_op(x, fn, args[i]);
+  }
+  return x;
+}
+
+
+lval *
+eval_op(lval *x, lval *op, lval *y)
+{
+  char *opc = op->sym;
   if (x->type == LVAL_ERR) { return x; }
   if (y->type == LVAL_ERR) { return y; }
   else {
-    if (strstr(op, "+")) return lval_num(x->num + y->num);
-    if (strstr(op, "*")) return lval_num(x->num * y->num);
-    if (strstr(op, "-")) return lval_num(x->num - y->num);
-    if (strstr(op, "/")) {
+    if (strstr(opc, "+")) return lval_num(x->num + y->num);
+    if (strstr(opc, "*")) return lval_num(x->num * y->num);
+    if (strstr(opc, "-")) return lval_num(x->num - y->num);
+    if (strstr(opc, "/")) {
       if (y->num == 0) {
 	return lval_err("ERROR: Division by zero!");
       } else { return lval_num(x->num / y->num); }
@@ -141,29 +149,29 @@ lval_read(mpc_ast_t *t) // convert the AST into a sexp
   if (strstr(t->tag, "num")) { return lval_read_num(t); }
   if (strstr(t->tag, "sym")) { return lval_read_sym(t); }
 
-  // if the tree is the root or a sexp then create an empty list
-  lval *x;
+  // if the tree is the root or a sexp then create an empty sexp
+  lval *v;
   if ((strcmp(t->tag, ">") == 0) || (strstr(t->tag, "sexp"))) {
-    x = lval_sexp();
+    v = lval_sexp();
   }
 
   // fill the empty sexp with any expressions within
-  for (int i = 2; i < t->children_num; i++) {
-    if (strcmp(t->children[i]->tag, "regex") { continue; }
-    if (strcmp(t->children[i]->contents, "(") { continue; }
-    if (strcmp(t->children[i]->contents, ")") { continue; }
-    lval_add(x, lval_read(t->children[i]));
+  for (int i = 0; i < t->children_num; i++) {
+    if (strcmp(t->children[i]->tag, "regex")) { continue; } // skip the noise
+    if (strcmp(t->children[i]->contents, "(")) { continue; }
+    if (strcmp(t->children[i]->contents, ")")) { continue; }
+    lval_add(v, lval_read(t->children[i]));
   }
 
-  return x;
+  return v;
 }
 
 lval *
 lval_add(lval *v, lval *x)
 {
   ++v->count;
-  realloc(v->cell, sizeof(lval *) * (v->count));
-  v->cell[v->count - 1] = x;
+  realloc(v->cell, sizeof(lval *) * (v->count)); // resize the cell array
+  v->cell[v->count - 1] = x; // append x to the end of the cell array
   return v;
 }
 
@@ -172,7 +180,6 @@ lval_read_sym(mpc_ast_t *t)
 {
   char *sym = t->contents;
   return lval_sym(sym);
-
 }
 
 lval *
@@ -198,7 +205,7 @@ main (int argc, char **argv)
   num: /-?[0-9]+/ ; \
   exp: <num> | <symbol> | <sexp> ;   \
   sexp: '(' <exp>* ')' ; \
-  input: /^/ <exp>* /$/ ;", Symbol, Num, Exp, Sexp, Input);
+  input: /^/ <exp> /$/ ;", Symbol, Num, Exp, Sexp, Input);
 
   mpc_result_t r;
 
@@ -207,8 +214,7 @@ main (int argc, char **argv)
     fgets(line, MAXLINE, stdin);
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
-      println_lval(eval(r.output));
-      // mpc_ast_print(r.output);
+      println_lval(eval(lval_read(r.output)));
       mpc_ast_delete(r.output);
     } else { // catch syntax errors here
       mpc_err_print(r.error);
