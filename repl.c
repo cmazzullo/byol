@@ -29,12 +29,14 @@ void print_lval(lval *v);
 void println_lval(lval *v);
 void lval_del(lval *v);
 lval *lval_read_num(mpc_ast_t *t);
-lval *lval_read_sym(mpc_ast_t *t);
 lval *lval_add(lval *v, lval *x);
 lval *apply(lval *fn, int argc, lval **args);
+
 // Enums
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP }; // values
 
+
+// CONSTRUCTORS
 lval *
 lval_num(long x) // create new number
 {
@@ -74,15 +76,43 @@ lval_sexp(void) // create new empty sexp
   return v;
 }
 
+// DESTRUCTOR
+void
+lval_del(lval *v) // free memory for an lval
+{
+  switch(v->type) {
+  case LVAL_NUM: break;
+  case LVAL_ERR: free(v->err); break;
+  case LVAL_SYM: free(v->sym); break;
+  case LVAL_SEXP:
+    for (int i = 0; i < v->count; i++) {
+      lval_del(v->cell[i]);
+    }
+  free(v->cell);
+  }
+  free(v);
+}
+
 void
 print_lval(lval *v)
 {
   switch (v->type) {
   case LVAL_NUM: printf("%li", v->num); break;
-  case LVAL_ERR: puts(v->err); break;
-  case LVAL_SYM: puts(v->sym); break;
-  case LVAL_SEXP: puts("sexp"); // TODO
+  case LVAL_ERR: printf(v->err); break;
+  case LVAL_SYM: printf(v->sym); break;
+  case LVAL_SEXP: print_lval_sexp(v);
   }
+}
+
+void
+print_lval_sexp(lval *v)
+{
+  putchar('(');
+  for (int i = 0; i < v->count; i++) {
+    if (i != 0) putchar(' ');
+    print_lval(v->cell[i]);
+  }
+  putchar(')');
 }
 
 void
@@ -127,27 +157,11 @@ eval_op(lval *x, lval *op, lval *y)
   return lval_err("Error: Invalid operator!");
 }
 
-void
-lval_del(lval *v) // free memory for an lval
-{
-  switch(v->type) {
-  case LVAL_NUM: break;
-  case LVAL_ERR: free(v->err); break;
-  case LVAL_SYM: free(v->sym); break;
-  case LVAL_SEXP:
-    for (int i = 0; i < v->count; i++) {
-      lval_del(v->cell[i]);
-    }
-  free(v->cell);
-  }
-  free(v);
-}
-
 lval *
 lval_read(mpc_ast_t *t) // convert the AST into a sexp
 {
   if (strstr(t->tag, "num")) { return lval_read_num(t); }
-  if (strstr(t->tag, "sym")) { return lval_read_sym(t); }
+  if (strstr(t->tag, "sym")) { return lval_sym(t->contents); }
 
   // if the tree is the root or a sexp then create an empty sexp
   lval *v;
@@ -157,33 +171,25 @@ lval_read(mpc_ast_t *t) // convert the AST into a sexp
 
   // fill the empty sexp with any expressions within
   for (int i = 0; i < t->children_num; i++) {
-    if (strcmp(t->children[i]->tag, "regex")) { continue; } // skip the noise
-    if (strcmp(t->children[i]->contents, "(")) { continue; }
-    if (strcmp(t->children[i]->contents, ")")) { continue; }
+    if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
+    if (strcmp(t->children[i]->contents, "(") == 0) { continue; }
+    if (strcmp(t->children[i]->contents, ")") == 0) { continue; }
     lval_add(v, lval_read(t->children[i]));
   }
-
   return v;
 }
 
 lval *
 lval_add(lval *v, lval *x)
 {
-  ++v->count;
-  realloc(v->cell, sizeof(lval *) * (v->count)); // resize the cell array
+  ++(v->count);
+  v->cell = realloc(v->cell, sizeof(lval *) * (v->count)); // resize the cell array
   v->cell[v->count - 1] = x; // append x to the end of the cell array
   return v;
 }
 
 lval *
-lval_read_sym(mpc_ast_t *t)
-{
-  char *sym = t->contents;
-  return lval_sym(sym);
-}
-
-lval *
-lval_read_num(mpc_ast_t *t)
+lval_read_num(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
 {
   long x = strtol(t->contents, NULL, 10);
   if (errno != ERANGE) return lval_num(x);
@@ -214,7 +220,8 @@ main (int argc, char **argv)
     fgets(line, MAXLINE, stdin);
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
-      println_lval(eval(lval_read(r.output)));
+      println_lval(lval_read(r.output));
+      //println_lval(eval(lval_read(r.output)));
       mpc_ast_delete(r.output);
     } else { // catch syntax errors here
       mpc_err_print(r.error);
