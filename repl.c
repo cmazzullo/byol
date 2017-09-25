@@ -27,6 +27,7 @@ lval *lval_sexp(void);
 lval *lval_err(char *err);
 void print_lval(lval *v);
 void println_lval(lval *v);
+void print_lval_sexp(lval *v, char open, char close);
 void lval_del(lval *v);
 lval *lval_read_num(mpc_ast_t *t);
 lval *lval_add(lval *v, lval *x);
@@ -100,19 +101,19 @@ print_lval(lval *v)
   case LVAL_NUM: printf("%li", v->num); break;
   case LVAL_ERR: printf(v->err); break;
   case LVAL_SYM: printf(v->sym); break;
-  case LVAL_SEXP: print_lval_sexp(v);
+  case LVAL_SEXP: print_lval_sexp(v, '(', ')');
   }
 }
 
 void
-print_lval_sexp(lval *v)
+print_lval_sexp(lval *v, char open, char close)
 {
-  putchar('(');
+  putchar(open);
   for (int i = 0; i < v->count; i++) {
     if (i != 0) putchar(' ');
     print_lval(v->cell[i]);
   }
-  putchar(')');
+  putchar(close);
 }
 
 void
