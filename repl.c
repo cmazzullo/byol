@@ -120,12 +120,24 @@ void
 println_lval(lval *v) { print_lval(v); putchar('\n'); }
 
 lval *
-eval(lval *v)
+eval(lval *v) // transforms one lval into another following the rules of language syntax
 {
   if (v->type == LVAL_SEXP) {
-    return apply(v->cell[0], v->count - 1, &(v->cell[1]));
+    if (v->count <= 1) return v; // return `()` and `(5)` as-is
+    lval *first = lval_pop(v); // pops off the first element
+    if (first->type == LVAL_SYM) {
+      return builtin_op(first, v); // evaluates `first` as a function with args = `v`
+    } else {
+      return lval_err("ERROR: Invalid function");
+    }
   }
   return v;
+}
+
+lval *
+builtin_op(lval *fn, lval *args)
+{
+  // TODO
 }
 
 lval *
