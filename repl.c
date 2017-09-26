@@ -150,15 +150,29 @@ eval(lval *v) // evaluates an lval recursively
 lval *
 builtin_op(lval *fn, lval *args) // apply fn to args
 {
-  char *sym = fn->sym;
-  if (strcmp(sym, "+") == 0) {
-    int sum = 0;
-    for (int i = 0; i < args->count; i++) {
-      sum += args->cell[i]->num;
-    }
-    return lval_num(sum);
+  char *op = fn->sym;
+
+  for (int i = 0; i < args->count; i++) { // check for non-number args
+    if (args->cell[i]->type != LVAL_NUM)
+      return lval_err("ERROR: Cannot operate on non-number!");
   }
-  return lval_num(0);
+
+  // pop first arg
+  lval *first = lval_pop(args, 0);
+
+  while (args->count > 0) {
+    lval *v = lval_pop(args, 0);
+    if (strcmp(op, "+") == 0) first->num += v->num;
+    if (strcmp(op, "-") == 0) first->num -= v->num;
+    if (strcmp(op, "*") == 0) first->num *= v->num;
+    if (strcmp(op, "/") == 0) {
+      if (v->num == 0) return lval_err("ERROR: Division by zero!");
+      first->num /= v->num;
+    }
+    lval_del(v);
+  }
+  lval_del(args);
+  return first;
 }
 
 lval *
