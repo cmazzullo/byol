@@ -9,7 +9,7 @@ A well-behaved REPL
 #define MAXLINE 1024
 
 // Structs
-typedef struct { // lisp value
+typedef struct lval { // lisp value
   int type;
   long num;
   char* err;
@@ -32,6 +32,9 @@ void lval_del(lval *v);
 lval *lval_read_num(mpc_ast_t *t);
 lval *lval_add(lval *v, lval *x);
 lval *apply(lval *fn, int argc, lval **args);
+lval *builtin_op(lval *fn, lval *args);
+lval *lval_pop(lval *v, int i);
+lval *lval_take(lval *v, int i);
 
 // Enums
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP }; // values
@@ -120,11 +123,21 @@ void
 println_lval(lval *v) { print_lval(v); putchar('\n'); }
 
 lval *
-eval(lval *v) // transforms one lval into another following the rules of language syntax
+eval(lval *v) // evaluates an lval recursively
 {
   if (v->type == LVAL_SEXP) {
     if (v->count <= 1) return v; // return `()` and `(5)` as-is
-    lval *first = lval_pop(v); // pops off the first element
+
+    // evaluate all children
+    for (int i = 0; i < v->count; i++) {
+      v->cell[i] = eval(v->cell[i]);
+      if (v->cell[i]->type == LVAL_ERR)
+	return v->cell[i]; // handle errors
+    }
+
+
+
+    lval *first = lval_pop(v, 0); // pops off the first element
     if (first->type == LVAL_SYM) {
       return builtin_op(first, v); // evaluates `first` as a function with args = `v`
     } else {
@@ -135,9 +148,37 @@ eval(lval *v) // transforms one lval into another following the rules of languag
 }
 
 lval *
-builtin_op(lval *fn, lval *args)
+builtin_op(lval *fn, lval *args) // apply fn to args
 {
-  // TODO
+  char *sym = fn->sym;
+  if (strcmp(sym, "+") == 0) {
+    int sum = 0;
+    for (int i = 0; i < args->count; i++) {
+      sum += args->cell[i]->num;
+    }
+    return lval_num(sum);
+  }
+  return lval_num(0);
+}
+
+lval *
+lval_pop(lval *v, int i) // pop off the first child of the sexp (car)
+{
+  lval *x = v->cell[i];
+
+  // shift the lvals after i to the left
+  memmove(&v->cell[i], &v->cell[i + 1], sizeof(lval *) * (v->count - i));
+  v->count--;
+  v->cell = realloc(v->cell, sizeof(lval *) * v->count);
+  return x;
+}
+
+lval *
+lval_take(lval *v, int i) // like pop but delete the resulting list
+{
+  lval *x = lval_pop(v, i);
+  lval_del(v);
+  return x;
 }
 
 lval *
@@ -224,7 +265,7 @@ main (int argc, char **argv)
   num: /-?[0-9]+/ ; \
   exp: <num> | <symbol> | <sexp> ;   \
   sexp: '(' <exp>* ')' ; \
-  input: /^/ <exp> /$/ ;", Symbol, Num, Exp, Sexp, Input);
+  input: /^/ <exp>+ /$/ ;", Symbol, Num, Exp, Sexp, Input);
 
   mpc_result_t r;
 
@@ -233,8 +274,8 @@ main (int argc, char **argv)
     fgets(line, MAXLINE, stdin);
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
-      println_lval(lval_read(r.output));
-      //println_lval(eval(lval_read(r.output)));
+      println_lval(eval(lval_read(r.output)));
+      /* mpc_ast_print(r.output); */
       mpc_ast_delete(r.output);
     } else { // catch syntax errors here
       mpc_err_print(r.error);
