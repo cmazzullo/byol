@@ -100,6 +100,7 @@ lval_del(lval *v) // free memory for an lval
   case LVAL_ERR: free(v->err); break;
   case LVAL_SYM: free(v->sym); break;
   case LVAL_SEXP:
+  case LVAL_QEXP:
     for (int i = 0; i < v->count; i++) {
       lval_del(v->cell[i]);
     }
@@ -247,6 +248,10 @@ read(mpc_ast_t *t) // convert the AST into a sexp
   lval *v;
   if ((strcmp(t->tag, ">") == 0) || (strstr(t->tag, "sexp"))) {
     v = lval_sexp();
+  }
+  else if (strstr(t->tag, "qexp")) {
+    v = lval_qexp();
+  }
 
 
     // fill the empty sexp with any expressions within
@@ -254,23 +259,10 @@ read(mpc_ast_t *t) // convert the AST into a sexp
       if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
       if (strcmp(t->children[i]->contents, "(") == 0) { continue; }
       if (strcmp(t->children[i]->contents, ")") == 0) { continue; }
-      lval_add(v, read(t->children[i]));
-    }
-  }
-
-  else if (strstr(t->tag, "qexp")) {
-    v = lval_qexp();
-
-
-    // fill the empty sexp with any expressions within
-    for (int i = 0; i < t->children_num; i++) {
-      if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
       if (strcmp(t->children[i]->contents, "{") == 0) { continue; }
       if (strcmp(t->children[i]->contents, "}") == 0) { continue; }
       lval_add(v, read(t->children[i]));
     }
-  }
-
   return v;
 }
 
