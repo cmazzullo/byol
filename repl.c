@@ -36,7 +36,7 @@ lval *apply(lval *fn, int argc, lval **args);
 lval *builtin_op(lval *fn, lval *args);
 lval *lval_pop(lval *v, int i);
 lval *lval_take(lval *v, int i);
-
+lval *builtin_head(lval *a);
 // Enums
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP, LVAL_QEXP }; // values
 
@@ -158,6 +158,15 @@ eval(lval *v) // evaluates an lval recursively
     }
   }
   return v;
+}
+
+lval *
+builtin_head(lval *a)
+{
+  lval *head = a->cell[0];
+
+  lval_del(a);
+  return head;
 }
 
 lval *
@@ -295,7 +304,7 @@ main (int argc, char **argv)
   mpc_parser_t *Input = mpc_new("input");
 
   mpca_lang(MPCA_LANG_DEFAULT,"\
-  symbol: '+' | '-' | '*' | '/' | '%' ; \
+  symbol: \"list\" | \"head\" | \"tail\" | \"join\" | \"eval\" | '+' | '-' | '*' | '/' | '%' ; \
   num: /-?[0-9]+/ ; \
   exp: <num> | <symbol> | <sexp> | <qexp> ;   \
   sexp: '(' <exp>* ')' ; \
