@@ -24,12 +24,13 @@ lval *eval_op(lval *x, lval *op, lval *y);
 lval *lval_num(long x);
 lval *lval_sym(char *sym);
 lval *lval_sexp(void);
+lval *lval_qexp(void);
 lval *lval_err(char *err);
 void print_lval(lval *v);
 void println_lval(lval *v);
 void print_lval_sexp(lval *v, char open, char close);
 void lval_del(lval *v);
-lval *lval_read_num(mpc_ast_t *t);
+lval *read_num(mpc_ast_t *t);
 lval *lval_add(lval *v, lval *x);
 lval *apply(lval *fn, int argc, lval **args);
 lval *builtin_op(lval *fn, lval *args);
@@ -37,7 +38,7 @@ lval *lval_pop(lval *v, int i);
 lval *lval_take(lval *v, int i);
 
 // Enums
-enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP }; // values
+enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP, LVAL_QEXP }; // values
 
 
 // CONSTRUCTORS
@@ -80,6 +81,16 @@ lval_sexp(void) // create new empty sexp
   return v;
 }
 
+lval *
+lval_qexp(void) // create new empty qexp
+{
+  lval *v = malloc(sizeof(lval));
+  v->type = LVAL_QEXP;
+  v->count = 0;
+  v->cell = NULL;
+  return v;
+}
+
 // DESTRUCTOR
 void
 lval_del(lval *v) // free memory for an lval
@@ -104,7 +115,8 @@ print_lval(lval *v)
   case LVAL_NUM: printf("%li", v->num); break;
   case LVAL_ERR: printf(v->err); break;
   case LVAL_SYM: printf(v->sym); break;
-  case LVAL_SEXP: print_lval_sexp(v, '(', ')');
+  case LVAL_SEXP: print_lval_sexp(v, '(', ')'); break;
+  case LVAL_QEXP: print_lval_sexp(v, '{', '}'); break;
   }
 }
 
@@ -226,24 +238,39 @@ eval_op(lval *x, lval *op, lval *y)
 }
 
 lval *
-lval_read(mpc_ast_t *t) // convert the AST into a sexp
+read(mpc_ast_t *t) // convert the AST into a sexp
 {
-  if (strstr(t->tag, "num")) { return lval_read_num(t); }
+  if (strstr(t->tag, "num")) { return read_num(t); }
   if (strstr(t->tag, "sym")) { return lval_sym(t->contents); }
 
   // if the tree is the root or a sexp then create an empty sexp
   lval *v;
   if ((strcmp(t->tag, ">") == 0) || (strstr(t->tag, "sexp"))) {
     v = lval_sexp();
+
+
+    // fill the empty sexp with any expressions within
+    for (int i = 0; i < t->children_num; i++) {
+      if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
+      if (strcmp(t->children[i]->contents, "(") == 0) { continue; }
+      if (strcmp(t->children[i]->contents, ")") == 0) { continue; }
+      lval_add(v, read(t->children[i]));
+    }
   }
 
-  // fill the empty sexp with any expressions within
-  for (int i = 0; i < t->children_num; i++) {
-    if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
-    if (strcmp(t->children[i]->contents, "(") == 0) { continue; }
-    if (strcmp(t->children[i]->contents, ")") == 0) { continue; }
-    lval_add(v, lval_read(t->children[i]));
+  else if (strstr(t->tag, "qexp")) {
+    v = lval_qexp();
+
+
+    // fill the empty sexp with any expressions within
+    for (int i = 0; i < t->children_num; i++) {
+      if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
+      if (strcmp(t->children[i]->contents, "{") == 0) { continue; }
+      if (strcmp(t->children[i]->contents, "}") == 0) { continue; }
+      lval_add(v, read(t->children[i]));
+    }
   }
+
   return v;
 }
 
@@ -257,7 +284,7 @@ lval_add(lval *v, lval *x)
 }
 
 lval *
-lval_read_num(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
+read_num(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
 {
   long x = strtol(t->contents, NULL, 10);
   if (errno != ERANGE) return lval_num(x);
@@ -272,14 +299,16 @@ main (int argc, char **argv)
   mpc_parser_t *Symbol = mpc_new("symbol");
   mpc_parser_t *Exp = mpc_new("exp");
   mpc_parser_t *Sexp = mpc_new("sexp");
+  mpc_parser_t *Qexp = mpc_new("qexp");
   mpc_parser_t *Input = mpc_new("input");
 
   mpca_lang(MPCA_LANG_DEFAULT,"\
   symbol: '+' | '-' | '*' | '/' | '%' ; \
   num: /-?[0-9]+/ ; \
-  exp: <num> | <symbol> | <sexp> ;   \
+  exp: <num> | <symbol> | <sexp> | <qexp> ;   \
   sexp: '(' <exp>* ')' ; \
-  input: /^/ <exp>+ /$/ ;", Symbol, Num, Exp, Sexp, Input);
+  qexp: '{' <exp>* '}' ; \
+  input: /^/ <exp>+ /$/ ;", Symbol, Num, Exp, Sexp, Qexp, Input);
 
   mpc_result_t r;
 
@@ -288,7 +317,9 @@ main (int argc, char **argv)
     fgets(line, MAXLINE, stdin);
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
-      println_lval(eval(lval_read(r.output)));
+      println_lval(read(r.output));
+      println_lval(eval(read(r.output)));
+
       /* mpc_ast_print(r.output); */
       mpc_ast_delete(r.output);
     } else { // catch syntax errors here
@@ -297,8 +328,9 @@ main (int argc, char **argv)
     }
   }
 
-  mpc_cleanup(5, Symbol, Num, Exp, Sexp, Input);
+  mpc_cleanup(6, Symbol, Num, Exp, Sexp, Qexp, Input);
   putchar('\n');
   free(line);
   return 0;
+
 }
