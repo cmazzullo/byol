@@ -19,7 +19,7 @@ typedef struct lval { // lisp value
 } lval;
 
 // Function prototypes
-lval *eval(lval *v);
+lval *lval_eval(lval *v);
 lval *eval_op(lval *x, lval *op, lval *y);
 lval *lval_num(long x);
 lval *lval_sym(char *sym);
@@ -37,6 +37,14 @@ lval *builtin_op(lval *fn, lval *args);
 lval *lval_pop(lval *v, int i);
 lval *lval_take(lval *v, int i);
 lval *builtin_head(lval *a);
+lval *list(lval *v);
+lval *head(lval *v);
+lval *tail(lval *v);
+lval *join(lval *v);
+lval *eval(lval *v);
+
+
+
 // Enums
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP, LVAL_QEXP }; // values
 
@@ -109,6 +117,73 @@ lval_del(lval *v) // free memory for an lval
   free(v);
 }
 
+// BUILTIN FUNCTIONS
+lval *
+list(lval *args) // Takes one or more args, returns a qexp containing them
+{
+  lval *q = lval_qexp();
+  for (int i = 0; i < args->count; i++) {
+    lval_add(q, args->cell[i]);
+  }
+  lval_del(args);
+  return q;
+}
+
+lval *
+head(lval *args) // Returns the first element of a qexp
+{
+  if (args->count != 1) {
+    lval_del(args);
+    return lval_err("ERROR: Function head passed too many arguments!");
+  }
+  if (args->cell[0]->type != LVAL_QEXP) {
+    lval_del(args);
+    return lval_err("ERROR: Cannot take head of a non-QEXP!");
+  }
+  if (args->cell[0]->count == 0) {
+    lval_del(args);
+    return lval_err("ERROR: Cannot take head of an empty QEXP!");
+  }
+
+  lval *v = lval_take(args, 0);
+  while (v->count > 1) lval_del(lval_pop(v, 1)) // pop & delete the second lval leaving only the head
+  return ;
+}
+
+lval *
+tail(lval *args) // Returns the last element of a qexp
+{
+  if (args->count != 1) {
+    lval_del(args);
+    return lval_err("ERROR: Function tail passed too many arguments!");
+  }
+  if (args->cell[0]->type != LVAL_QEXP) {
+    lval_del(args);
+    return lval_err("ERROR: Cannot take tail of a non-QEXP!");
+  }
+  if (args->cell[0]->count == 0) {
+    lval_del(args);
+    return lval_err("ERROR: Cannot take tail of an empty QEXP!");
+  }
+
+  lval *v = lval_take(args, 0);
+  while (v->count > 1) lval_del(lval_pop(v, 0)); // pop & delete the first lval leaving only the tail
+  return v;
+}
+
+lval *
+join(lval *args)
+{
+  lval_del(args);
+}
+
+lval *
+eval(lval *args)
+{
+  lval_del(args);
+}
+
+// PRINTING
 void
 print_lval(lval *v)
 {
@@ -135,15 +210,16 @@ print_lval_sexp(lval *v, char open, char close)
 void
 println_lval(lval *v) { print_lval(v); putchar('\n'); }
 
+// EVALUATION
 lval *
-eval(lval *v) // evaluates an lval recursively
+lval_eval(lval *v) // evaluates an lval recursively
 {
   if (v->type == LVAL_SEXP) {
     if (v->count <= 1) return v; // return `()` and `(5)` as-is
 
     // evaluate all children
     for (int i = 0; i < v->count; i++) {
-      v->cell[i] = eval(v->cell[i]);
+      v->cell[i] = lval_eval(v->cell[i]);
       if (v->cell[i]->type == LVAL_ERR)
 	return v->cell[i]; // handle errors
     }
@@ -158,15 +234,6 @@ eval(lval *v) // evaluates an lval recursively
     }
   }
   return v;
-}
-
-lval *
-builtin_head(lval *a)
-{
-  lval *head = a->cell[0];
-
-  lval_del(a);
-  return head;
 }
 
 lval *
@@ -319,7 +386,7 @@ main (int argc, char **argv)
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
       println_lval(read(r.output));
-      println_lval(eval(read(r.output)));
+      println_lval(lval_eval(read(r.output)));
 
       /* mpc_ast_print(r.output); */
       mpc_ast_delete(r.output);
