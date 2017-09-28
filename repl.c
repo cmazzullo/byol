@@ -184,6 +184,31 @@ eval(lval *args)
   return lval_eval(x);
 }
 
+lval *
+builtin_cons(lval *args)
+{
+  LASSERT(args, args->count == 2,
+	  "ERROR: Cons function did not recieve 2 arguments");
+  LASSERT(args, args->cell[1]->type == LVAL_QEXP,
+	  "ERROR: Second argument to cons function was not a QEXP");
+  lval *q = lval_qexp();
+  lval_add(q, args->cell[0]);
+  lval *a = lval_pop(args, 1);
+  while (a->count > 0) lval_add(q, lval_pop(a, 0));
+  return q;
+}
+
+lval *
+builtin_len(lval *args)
+{
+  LASSERT(args, args->count == 1,
+	  "ERROR: Len function needs exactly 1 argument");
+  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
+	  "ERROR: Argument to len function was not a QEXP");
+
+  return lval_num(args->cell[0]->count);
+}
+
 // PRINTING
 void
 print_lval(lval *v)
@@ -241,6 +266,8 @@ builtin(char *fn, lval *args)
   if (strcmp(fn, "tail") == 0) { return builtin_tail(args); }
   if (strcmp(fn, "join") == 0) { return builtin_join(args); }
   if (strcmp(fn, "eval") == 0) { return eval(args); }
+  if (strcmp(fn, "cons") == 0) { return builtin_cons(args); }
+  if (strcmp(fn, "len") == 0) { return builtin_len(args); }
   if (strstr("+-/*", fn)) { return builtin_op(fn, args); }
   lval_del(args);
   return lval_err("ERROR: Unknown function");
@@ -346,11 +373,13 @@ main (int argc, char **argv)
   mpc_parser_t *Input = mpc_new("input");
 
   mpca_lang(MPCA_LANG_DEFAULT,"\
-  symbol: \"list\" | \"head\" | \"tail\" | \"join\" | \"eval\" | '+' | '-' | '*' | '/' | '%' ; \
-  num: /-?[0-9]+/ ; \
-  exp: <num> | <symbol> | <sexp> | <qexp> ;   \
-  sexp: '(' <exp>* ')' ; \
-  qexp: '{' <exp>* '}' ; \
+  symbol: \"cons\" | \"list\" | \"head\" | \"tail\" | \"join\" | \
+  \"eval\" | \"len\"							\
+  | '+' | '-' | '*' | '/' | '%' ;					\
+  num: /-?[0-9]+/ ;							\
+  exp: <num> | <symbol> | <sexp> | <qexp> ;				\
+  sexp: '(' <exp>* ')' ;						\
+  qexp: '{' <exp>* '}' ;						\
   input: /^/ <exp>+ /$/ ;", Symbol, Num, Exp, Sexp, Qexp, Input);
 
   mpc_result_t r;
