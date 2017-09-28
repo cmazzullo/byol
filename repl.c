@@ -33,7 +33,7 @@ void print_lval_sexp(lval *v, char open, char close);
 void lval_del(lval *v);
 lval *read_num(mpc_ast_t *t);
 lval *lval_add(lval *v, lval *x);
-lval *builtin_op(lval *fn, lval *args);
+lval *builtin_op(char *fn, lval *args);
 lval *lval_pop(lval *v, int i);
 lval *lval_take(lval *v, int i);
 lval *builtin_head(lval *a);
@@ -42,7 +42,7 @@ lval *head(lval *v);
 lval *tail(lval *v);
 lval *join(lval *v);
 lval *eval(lval *v);
-
+lval *builtin(char *fn, lval *args);
 // Enums
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP, LVAL_QEXP }; // values
 
@@ -119,11 +119,8 @@ lval_del(lval *v) // free memory for an lval
 lval *
 builtin_list(lval *args) // Takes one or more args, returns a qexp containing them
 {
-  lval *q = lval_qexp();
-  while (args->count > 0) lval_add(q, lval_pop(args, 0));
-
-  lval_del(args);
-  return q;
+  args->type = LVAL_QEXP;
+  return args;
 }
 
 lval *
@@ -180,12 +177,11 @@ eval(lval *args)
 {
   LASSERT(args, args->count == 1,
 	  "ERROR: Function eval passed too many arguments!");
-  lval *a = args->cell[0];
-  LASSERT(args, a->type == LVAL_QEXP, "ERROR: Cannot eval a non-QEXP!");
-  lval *v = lval_sexp();
-  while (a->count > 0) lval_add(v, lval_pop(a, 0));
-  lval_del(args);
-  return lval_eval(v);
+  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
+	  "ERROR: Cannot eval a non-QEXP!");
+  lval *x = lval_take(args, 0);
+  x->type = LVAL_SEXP;
+  return lval_eval(x);
 }
 
 // PRINTING
@@ -229,29 +225,31 @@ lval_eval(lval *v) // evaluates an lval recursively
 	return v->cell[i]; // handle errors
     }
 
-
-
     lval *first = lval_pop(v, 0); // pops off the first element
     LASSERT(first, first->type == LVAL_SYM,
 	    "ERROR: Invalid function");
-      return builtin_op(first, v); // evaluates `first` as a function with args = `v`
+    return builtin(first->sym, v); // evaluates `first` as a function with args = `v`
   }
   return v;
 }
 
 lval *
-builtin_op(lval *fn, lval *args) // apply fn to args
+builtin(char *fn, lval *args)
 {
-  char *op = fn->sym;
+  if (strcmp(fn, "list") == 0) { return builtin_list(args); }
+  if (strcmp(fn, "head") == 0) { return builtin_head(args); }
+  if (strcmp(fn, "tail") == 0) { return builtin_tail(args); }
+  if (strcmp(fn, "join") == 0) { return builtin_join(args); }
+  if (strcmp(fn, "eval") == 0) { return eval(args); }
+  if (strstr("+-/*", fn)) { return builtin_op(fn, args); }
+  lval_del(args);
+  return lval_err("ERROR: Unknown function");
+}
 
-  if (strcmp(op, "list") == 0) { return builtin_list(args); }
-  if (strcmp(op, "head") == 0) { return builtin_head(args); }
-  if (strcmp(op, "tail") == 0) { return builtin_tail(args); }
-  if (strcmp(op, "join") == 0) { return builtin_join(args); }
-  if (strcmp(op, "eval") == 0) { return eval(args); }
-
-  // Numerical functions -
-  for (int i = 0; i < args->count; i++) { // check for non-number args
+lval *
+builtin_op(char *op, lval *args) // apply fn to args
+{
+  for (int i = 0; i < args->count; i++) {
     LASSERT(args, args->cell[i]->type == LVAL_NUM,
 	    "ERROR: Cannot operate on non-number!");
   }
@@ -307,8 +305,6 @@ read(mpc_ast_t *t) // convert the AST into a sexp
   else if (strstr(t->tag, "qexp")) {
     v = lval_qexp();
   }
-
-
     // fill the empty sexp with any expressions within
     for (int i = 0; i < t->children_num; i++) {
       if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
