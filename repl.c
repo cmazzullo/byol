@@ -7,6 +7,8 @@ A well-behaved REPL
 #include <stdlib.h>
 
 #define MAXLINE 1024
+#define LASSERT(args, cond, err) \
+  if (!(cond)) { lval_del(args); return lval_err(err); }
 
 // Structs
 typedef struct lval { // lisp value
@@ -32,11 +34,16 @@ void print_lval_sexp(lval *v, char open, char close);
 void lval_del(lval *v);
 lval *read_num(mpc_ast_t *t);
 lval *lval_add(lval *v, lval *x);
-lval *apply(lval *fn, int argc, lval **args);
-lval *builtin_op(lval *fn, lval *args);
+lval *builtin_op(char *fn, lval *args);
 lval *lval_pop(lval *v, int i);
 lval *lval_take(lval *v, int i);
-
+lval *builtin_head(lval *a);
+lval *list(lval *v);
+lval *head(lval *v);
+lval *tail(lval *v);
+lval *join(lval *v);
+lval *eval(lval *v);
+lval *builtin(char *fn, lval *args);
 // Enums
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP, LVAL_QEXP }; // values
 
@@ -109,6 +116,101 @@ lval_del(lval *v) // free memory for an lval
   free(v);
 }
 
+// BUILTIN FUNCTIONS
+lval *
+builtin_list(lval *args) // Takes one or more args, returns a qexp containing them
+{
+  args->type = LVAL_QEXP;
+  return args;
+}
+
+lval *
+builtin_head(lval *args) // Returns the first element of a qexp
+{
+  LASSERT(args, args->count == 1,
+	  "ERROR: Function head passed too many arguments!");
+  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
+	  "ERROR: Cannot take head of a non-QEXP!");
+  LASSERT(args, args->cell[0]->count != 0,
+	  "ERROR: Cannot take head of an empty QEXP!");
+
+  lval *v = lval_take(args, 0);
+  while (v->count > 1) lval_del(lval_pop(v, 1)); // pop & delete the second lval leaving only the head
+  return v;
+}
+
+lval *
+builtin_tail(lval *args) // Returns the cdr of a qexp
+{
+  LASSERT(args, args->count == 1,
+	  "ERROR: Function tail passed too many arguments!");
+  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
+	  "ERROR: Cannot take tail of a non-QEXP!");
+  LASSERT(args, args->cell[0]->count != 0,
+	  "ERROR: Cannot take tail of an empty QEXP!");
+
+  lval *v = lval_take(args, 0);
+  lval_del(lval_pop(v, 0)); // pop & delete the first lval leaving the cdr
+  return v;
+}
+
+lval *
+builtin_join(lval *args) // Join together one or more qexps
+{
+  LASSERT(args, args->count != 0,
+	  "ERROR: Function join passed 0 arguments!");
+
+  lval *v = lval_qexp();
+  while (args->count > 0) {
+    lval *a = lval_pop(args, 0);
+    LASSERT(a, a->type == LVAL_QEXP,
+	    "ERROR: Cannot take tail of a non-QEXP!");
+    while (a->count > 0) lval_add(v, lval_pop(a, 0));
+    lval_del(a);
+  }
+
+  lval_del(args);
+  return v;
+}
+
+lval *
+eval(lval *args)
+{
+  LASSERT(args, args->count == 1,
+	  "ERROR: Function eval passed too many arguments!");
+  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
+	  "ERROR: Cannot eval a non-QEXP!");
+  lval *x = lval_take(args, 0);
+  x->type = LVAL_SEXP;
+  return lval_eval(x);
+}
+
+lval *
+builtin_cons(lval *args)
+{
+  LASSERT(args, args->count == 2,
+	  "ERROR: Cons function did not recieve 2 arguments");
+  LASSERT(args, args->cell[1]->type == LVAL_QEXP,
+	  "ERROR: Second argument to cons function was not a QEXP");
+  lval *q = lval_qexp();
+  lval_add(q, args->cell[0]);
+  lval *a = lval_pop(args, 1);
+  while (a->count > 0) lval_add(q, lval_pop(a, 0));
+  return q;
+}
+
+lval *
+builtin_len(lval *args)
+{
+  LASSERT(args, args->count == 1,
+	  "ERROR: Len function needs exactly 1 argument");
+  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
+	  "ERROR: Argument to len function was not a QEXP");
+
+  return lval_num(args->cell[0]->count);
+}
+
+// PRINTING
 void
 print_lval(lval *v)
 {
@@ -135,6 +237,7 @@ print_lval_sexp(lval *v, char open, char close)
 void
 println_lval(lval *v) { print_lval(v); putchar('\n'); }
 
+// EVALUATION
 lval *
 lval_eval(lval *v) // evaluates an lval recursively
 {
@@ -148,29 +251,37 @@ lval_eval(lval *v) // evaluates an lval recursively
 	return v->cell[i]; // handle errors
     }
 
-
-
     lval *first = lval_pop(v, 0); // pops off the first element
-    if (first->type == LVAL_SYM) {
-      return builtin_op(first, v); // evaluates `first` as a function with args = `v`
-    } else {
-      return lval_err("ERROR: Invalid function");
-    }
+    LASSERT(first, first->type == LVAL_SYM,
+	    "ERROR: Invalid function");
+    return builtin(first->sym, v); // evaluates `first` as a function with args = `v`
   }
   return v;
 }
 
 lval *
-builtin_op(lval *fn, lval *args) // apply fn to args
+builtin(char *fn, lval *args)
 {
-  char *op = fn->sym;
+  if (strcmp(fn, "list") == 0) { return builtin_list(args); }
+  if (strcmp(fn, "head") == 0) { return builtin_head(args); }
+  if (strcmp(fn, "tail") == 0) { return builtin_tail(args); }
+  if (strcmp(fn, "join") == 0) { return builtin_join(args); }
+  if (strcmp(fn, "eval") == 0) { return eval(args); }
+  if (strcmp(fn, "cons") == 0) { return builtin_cons(args); }
+  if (strcmp(fn, "len") == 0) { return builtin_len(args); }
+  if (strstr("+-/*", fn)) { return builtin_op(fn, args); }
+  lval_del(args);
+  return lval_err("ERROR: Unknown function");
+}
 
-  for (int i = 0; i < args->count; i++) { // check for non-number args
-    if (args->cell[i]->type != LVAL_NUM)
-      return lval_err("ERROR: Cannot operate on non-number!");
+lval *
+builtin_op(char *op, lval *args) // apply fn to args
+{
+  for (int i = 0; i < args->count; i++) {
+    LASSERT(args, args->cell[i]->type == LVAL_NUM,
+	    "ERROR: Cannot operate on non-number!");
   }
 
-  // pop first arg
   lval *first = lval_pop(args, 0);
 
   while (args->count > 0) {
@@ -179,7 +290,7 @@ builtin_op(lval *fn, lval *args) // apply fn to args
     if (strcmp(op, "-") == 0) first->num -= v->num;
     if (strcmp(op, "*") == 0) first->num *= v->num;
     if (strcmp(op, "/") == 0) {
-      if (v->num == 0) return lval_err("ERROR: Division by zero!");
+      LASSERT(v, v->num != 0, "ERROR: Division by zero!");
       first->num /= v->num;
     }
     lval_del(v);
@@ -209,34 +320,6 @@ lval_take(lval *v, int i) // like pop but delete the resulting list
 }
 
 lval *
-apply(lval *fn, int argc, lval **args)
-{
-  lval *x = args[0];
-  for (int i = 1; i < argc; i++) {
-    x = lval_eval_op(x, fn, args[i]);
-  }
-  return x;
-}
-
-
-lval *
-lval_eval_op(lval *x, lval *op, lval *y)
-{
-  char *opc = op->sym;
-  if (x->type == LVAL_ERR) { return x; }
-  if (y->type == LVAL_ERR) { return y; }
-  else {
-    if (strstr(opc, "+")) return lval_num(x->num + y->num);
-    if (strstr(opc, "*")) return lval_num(x->num * y->num);
-    if (strstr(opc, "-")) return lval_num(x->num - y->num);
-    if (strstr(opc, "/")) {
-      if (y->num == 0) {
-	return lval_err("ERROR: Division by zero!");
-      } else { return lval_num(x->num / y->num); }
-    }
-  }
-  return lval_err("Error: Invalid operator!");
-}
 
 lval *
 read(mpc_ast_t *t) // convert the AST into a sexp
@@ -252,8 +335,6 @@ read(mpc_ast_t *t) // convert the AST into a sexp
   else if (strstr(t->tag, "qexp")) {
     v = lval_qexp();
   }
-
-
     // fill the empty sexp with any expressions within
     for (int i = 0; i < t->children_num; i++) {
       if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
@@ -295,11 +376,13 @@ main (int argc, char **argv)
   mpc_parser_t *Input = mpc_new("input");
 
   mpca_lang(MPCA_LANG_DEFAULT,"\
-  symbol: '+' | '-' | '*' | '/' | '%' ; \
-  num: /-?[0-9]+/ ; \
-  exp: <num> | <symbol> | <sexp> | <qexp> ;   \
-  sexp: '(' <exp>* ')' ; \
-  qexp: '{' <exp>* '}' ; \
+  symbol: \"cons\" | \"list\" | \"head\" | \"tail\" | \"join\" | \
+  \"eval\" | \"len\"							\
+  | '+' | '-' | '*' | '/' | '%' ;					\
+  num: /-?[0-9]+/ ;							\
+  exp: <num> | <symbol> | <sexp> | <qexp> ;				\
+  sexp: '(' <exp>* ')' ;						\
+  qexp: '{' <exp>* '}' ;						\
   input: /^/ <exp>+ /$/ ;", Symbol, Num, Exp, Sexp, Qexp, Input);
 
   mpc_result_t r;
@@ -324,5 +407,4 @@ main (int argc, char **argv)
   putchar('\n');
   free(line);
   return 0;
-
 }
