@@ -19,8 +19,8 @@ typedef struct lval { // lisp value
 } lval;
 
 // Function prototypes
-lval *eval(lval *v);
-lval *eval_op(lval *x, lval *op, lval *y);
+lval *lval_eval(lval *v);
+lval *lval_eval_op(lval *x, lval *op, lval *y);
 lval *lval_num(long x);
 lval *lval_sym(char *sym);
 lval *lval_sexp(void);
@@ -136,14 +136,14 @@ void
 println_lval(lval *v) { print_lval(v); putchar('\n'); }
 
 lval *
-eval(lval *v) // evaluates an lval recursively
+lval_eval(lval *v) // evaluates an lval recursively
 {
   if (v->type == LVAL_SEXP) {
     if (v->count <= 1) return v; // return `()` and `(5)` as-is
 
     // evaluate all children
     for (int i = 0; i < v->count; i++) {
-      v->cell[i] = eval(v->cell[i]);
+      v->cell[i] = lval_eval(v->cell[i]);
       if (v->cell[i]->type == LVAL_ERR)
 	return v->cell[i]; // handle errors
     }
@@ -213,14 +213,14 @@ apply(lval *fn, int argc, lval **args)
 {
   lval *x = args[0];
   for (int i = 1; i < argc; i++) {
-    x = eval_op(x, fn, args[i]);
+    x = lval_eval_op(x, fn, args[i]);
   }
   return x;
 }
 
 
 lval *
-eval_op(lval *x, lval *op, lval *y)
+lval_eval_op(lval *x, lval *op, lval *y)
 {
   char *opc = op->sym;
   if (x->type == LVAL_ERR) { return x; }
@@ -310,7 +310,7 @@ main (int argc, char **argv)
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
       println_lval(read(r.output));
-      println_lval(eval(read(r.output)));
+      println_lval(lval_eval(read(r.output)));
 
       /* mpc_ast_print(r.output); */
       mpc_ast_delete(r.output);
