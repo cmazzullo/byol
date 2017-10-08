@@ -10,15 +10,29 @@ A well-behaved REPL
 #define LASSERT(args, cond, err) \
   if (!(cond)) { lval_del(args); return lval_err(err); }
 
+// Forward Declarations
+struct lval;
+struct lenv;
+typedef struct lval lval;
+typedef struct lenv lenv;
+
+// Enums
+enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP,
+       LVAL_QEXP, LVAL_FN };
+
 // Structs
-typedef struct lval { // lisp value
+struct lval { // lisp value
   int type;
   long num;
   char* err;
   char* sym;
+  lbuiltin fn;
+
   int count;
-  struct lval **cell;
-} lval;
+  lval **cell;
+};
+
+typedef lval*(*lbuiltin)(lenv *, lval *);
 
 // Function prototypes
 lval *lval_eval(lval *v);
@@ -44,8 +58,6 @@ lval *tail(lval *v);
 lval *join(lval *v);
 lval *eval(lval *v);
 lval *builtin(char *fn, lval *args);
-// Enums
-enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP, LVAL_QEXP }; // values
 
 
 // CONSTRUCTORS
@@ -98,12 +110,22 @@ lval_qexp(void) // create new empty qexp
   return v;
 }
 
+lval *
+lval_fn(lbuiltin fn)
+{
+  lval *v = malloc(sizeof(lval));
+  v->type = LVAL_FN;
+  v->fn = fn;
+  return v;
+}
+
 // DESTRUCTOR
 void
 lval_del(lval *v) // free memory for an lval
 {
   switch(v->type) {
   case LVAL_NUM: break;
+  case LVAL_FN: break;
   case LVAL_ERR: free(v->err); break;
   case LVAL_SYM: free(v->sym); break;
   case LVAL_SEXP:
@@ -216,6 +238,7 @@ print_lval(lval *v)
 {
   switch (v->type) {
   case LVAL_NUM: printf("%li", v->num); break;
+  case LVAL_FN: printf("<function>"); break;
   case LVAL_ERR: printf(v->err); break;
   case LVAL_SYM: printf(v->sym); break;
   case LVAL_SEXP: print_lval_sexp(v, '(', ')'); break;
@@ -320,8 +343,6 @@ lval_take(lval *v, int i) // like pop but delete the resulting list
 }
 
 lval *
-
-lval *
 read(mpc_ast_t *t) // convert the AST into a sexp
 {
   if (strstr(t->tag, "num")) { return read_num(t); }
@@ -376,14 +397,12 @@ main (int argc, char **argv)
   mpc_parser_t *Input = mpc_new("input");
 
   mpca_lang(MPCA_LANG_DEFAULT,"\
-  symbol: \"cons\" | \"list\" | \"head\" | \"tail\" | \"join\" | \
-  \"eval\" | \"len\"							\
-  | '+' | '-' | '*' | '/' | '%' ;					\
   num: /-?[0-9]+/ ;							\
-  exp: <num> | <symbol> | <sexp> | <qexp> ;				\
+  symbol: /[a-zA-Z0-9*+\\-\\/\\\\_=<>!&]+/ ;				\
   sexp: '(' <exp>* ')' ;						\
   qexp: '{' <exp>* '}' ;						\
-  input: /^/ <exp>+ /$/ ;", Symbol, Num, Exp, Sexp, Qexp, Input);
+  exp: <num> | <symbol> | <sexp> | <qexp> ; \
+  input: /^/ <exp>* /$/ ;", Num, Symbol, Sexp, Qexp, Exp, Input);
 
   mpc_result_t r;
 
