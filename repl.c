@@ -15,12 +15,15 @@ struct lval;
 struct lenv;
 typedef struct lval lval;
 typedef struct lenv lenv;
+typedef lval*(*lbuiltin)(lenv *, lval *);
 
 // Enums
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP,
        LVAL_QEXP, LVAL_FN };
 
+
 // Structs
+
 struct lval { // lisp value
   int type;
   long num;
@@ -32,9 +35,15 @@ struct lval { // lisp value
   lval **cell;
 };
 
-typedef lval*(*lbuiltin)(lenv *, lval *);
+struct lenv {
+  int count;
+  lval **vals;
+  char **names;
+};
+
 
 // Function prototypes
+lval *lval_copy(lval *v);
 lval *lval_eval(lval *v);
 lval *lval_eval_op(lval *x, lval *op, lval *y);
 lval *lval_num(long x);
@@ -136,6 +145,96 @@ lval_del(lval *v) // free memory for an lval
   free(v->cell);
   }
   free(v);
+}
+
+lval *
+lval_copy(lval *v)
+{
+  lval *x = malloc(sizeof(lval));
+  x->type = v->type;
+
+  switch (v->type) {
+  case LVAL_NUM: x->num = v->num; break;
+  case LVAL_FN: x->fn = v->fn; break;
+
+  case LVAL_ERR:
+    x->err = malloc((strlen(v->err) + 1) * sizeof(char));
+    strcpy(x->err, v->err);
+    break;
+  case LVAL_SYM:
+    x->sym = malloc((strlen(v->sym) + 1) * sizeof(char));
+    strcpy(x->sym, v->sym);
+    break;
+    //complicated
+    // first, run
+  case LVAL_SEXP:
+  case LVAL_QEXP:
+    x->count = v->count;
+    x->cell = malloc(x->count * sizeof(lval *));
+    for (int i = 0; i < x->count; i++) {
+      x->cell[i] = lval_copy(v->cell[i]);
+    }
+    break;
+  }
+
+  return x;
+}
+
+// ENVIRONMENT
+lenv *
+lenv_new(void)
+{
+  lenv *env = malloc(sizeof(lenv));
+  env->count = 0;
+  env->names = NULL;
+  env->vals = NULL;
+  return env;
+}
+
+void
+lenv_del(lenv *env)
+{
+  for (int i = 0; i < env->count; i++) {
+    free(env->names[i]);
+    lval_del(env->vals[i]);
+  }
+  free(env->names);
+  free(env->vals);
+  free(env);
+}
+
+// Get a value from the environment
+lval *
+env_get(char *name, lenv *env)
+{
+  for (int i = 0; i < env->count; i++) {
+    if (strcmp(name, env->names[i]) == 0)
+      return lval_copy(env->vals[i]);
+  }
+  return lval_err("ERROR: Variable not found");
+}
+
+// Add a name/value pair to the environment
+void
+env_put(lval *name, lval *v, lenv *env)
+{
+  // Check if the name is taken
+  for (int i = 0; i < env->count; i++) {
+    if (strcmp(name->sym, env->names[i]) == 0) {
+      lval_del(env->vals[i]);
+      env->vals[i] = lval_copy(v);
+      return;
+    }
+  }
+
+  // Add size to the arrays in env by realloc'ing
+  ++(env->count);
+  env->names = realloc(env->names, env->count * sizeof(char *));
+  env->vals = realloc(env->vals, env->count * sizeof(lval *));
+
+  env->vals[env->count - 1] = lval_copy(v);
+  env->names[env->count - 1] = malloc(strlen(name->sym) + 1);
+  strcpy(env->names[env->count - 1], name->sym);
 }
 
 // BUILTIN FUNCTIONS
