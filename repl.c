@@ -1,5 +1,5 @@
 /*
-A well-behaved REPL
+  A well-behaved REPL
 */
 
 #include "mpc/mpc.h"
@@ -20,7 +20,6 @@ typedef lval*(*lbuiltin)(lenv *, lval *);
 // Enums
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP,
        LVAL_QEXP, LVAL_FN };
-
 
 // Structs
 
@@ -43,8 +42,22 @@ struct lenv {
 
 
 // Function prototypes
+lval *lval_eval_sexp(lenv *e, lval *v);
+lval *lenv_get(lenv *env, char *name);
+lval *builtin_list(lenv *env, lval *args);
+lval *builtin_head(lenv *env, lval *args);
+lval *builtin_tail(lenv *env, lval *args);
+lval *builtin_eval(lenv *env, lval *args);
+lval *builtin_join(lenv *env, lval *args);
+
+lval *builtin_add(lenv *env, lval *args);
+lval *builtin_sub(lenv *env, lval *args);
+lval *builtin_multiply(lenv *env, lval *args);
+lval *builtin_divide(lenv *env, lval *args);
+lval *builtin_op(lenv *e, char *op, lval *args);
+
 lval *lval_copy(lval *v);
-lval *lval_eval(lval *v);
+lval *lval_eval(lenv *e, lval *v);
 lval *lval_eval_op(lval *x, lval *op, lval *y);
 lval *lval_num(long x);
 lval *lval_sym(char *sym);
@@ -57,16 +70,9 @@ void print_lval_sexp(lval *v, char open, char close);
 void lval_del(lval *v);
 lval *read_num(mpc_ast_t *t);
 lval *lval_add(lval *v, lval *x);
-lval *builtin_op(char *fn, lval *args);
 lval *lval_pop(lval *v, int i);
 lval *lval_take(lval *v, int i);
-lval *builtin_head(lval *a);
-lval *list(lval *v);
-lval *head(lval *v);
-lval *tail(lval *v);
-lval *join(lval *v);
-lval *eval(lval *v);
-lval *builtin(char *fn, lval *args);
+lval *builtin(lenv *e, lval *fn, lval *args);
 
 
 // CONSTRUCTORS
@@ -205,7 +211,7 @@ lenv_del(lenv *env)
 
 // Get a value from the environment
 lval *
-env_get(char *name, lenv *env)
+lenv_get(lenv *env, char *name)
 {
   for (int i = 0; i < env->count; i++) {
     if (strcmp(name, env->names[i]) == 0)
@@ -216,7 +222,7 @@ env_get(char *name, lenv *env)
 
 // Add a name/value pair to the environment
 void
-env_put(lval *name, lval *v, lenv *env)
+lenv_put(lenv *env, lval *name, lval *v)
 {
   // Check if the name is taken
   for (int i = 0; i < env->count; i++) {
@@ -238,15 +244,64 @@ env_put(lval *name, lval *v, lenv *env)
 }
 
 // BUILTIN FUNCTIONS
+void
+lenv_add_builtin(lenv *e, char *name, lbuiltin fn)
+{
+  lval *k = lval_sym(name);
+  lval *v = lval_fn(fn);
+  lenv_put(e, k, v);
+  lval_del(k);
+  lval_del(v);
+}
+
+void
+lenv_add_builtins(lenv *e)
+{
+  lenv_add_builtin(e, "list", builtin_list);
+  lenv_add_builtin(e, "head", builtin_head);
+  lenv_add_builtin(e, "tail", builtin_tail);
+  lenv_add_builtin(e, "eval", builtin_eval);
+  lenv_add_builtin(e, "join", builtin_join);
+
+  lenv_add_builtin(e, "+", builtin_add);
+  lenv_add_builtin(e, "-", builtin_sub);
+  lenv_add_builtin(e, "*", builtin_multiply);
+  lenv_add_builtin(e, "/", builtin_divide);
+}
+
 lval *
-builtin_list(lval *args) // Takes one or more args, returns a qexp containing them
+builtin_add(lenv *e, lval *args)
+{
+  return builtin_op(e, "+", args);
+}
+
+lval *
+builtin_sub(lenv *e, lval *args)
+{
+  return builtin_op(e, "-", args);
+}
+
+lval *
+builtin_multiply(lenv *e, lval *args)
+{
+  return builtin_op(e, "*", args);
+}
+
+lval *
+builtin_divide(lenv *e, lval *args)
+{
+  return builtin_op(e, "/", args);
+}
+
+lval *
+builtin_list(lenv *e, lval *args) // Takes one or more args, returns a qexp containing them
 {
   args->type = LVAL_QEXP;
   return args;
 }
 
 lval *
-builtin_head(lval *args) // Returns the first element of a qexp
+builtin_head(lenv *e, lval *args) // Returns the first element of a qexp
 {
   LASSERT(args, args->count == 1,
 	  "ERROR: Function head passed too many arguments!");
@@ -261,7 +316,7 @@ builtin_head(lval *args) // Returns the first element of a qexp
 }
 
 lval *
-builtin_tail(lval *args) // Returns the cdr of a qexp
+builtin_tail(lenv *e, lval *args) // Returns the cdr of a qexp
 {
   LASSERT(args, args->count == 1,
 	  "ERROR: Function tail passed too many arguments!");
@@ -276,7 +331,7 @@ builtin_tail(lval *args) // Returns the cdr of a qexp
 }
 
 lval *
-builtin_join(lval *args) // Join together one or more qexps
+builtin_join(lenv *e, lval *args) // Join together one or more qexps
 {
   LASSERT(args, args->count != 0,
 	  "ERROR: Function join passed 0 arguments!");
@@ -295,7 +350,7 @@ builtin_join(lval *args) // Join together one or more qexps
 }
 
 lval *
-eval(lval *args)
+builtin_eval(lenv *e, lval *args)
 {
   LASSERT(args, args->count == 1,
 	  "ERROR: Function eval passed too many arguments!");
@@ -303,7 +358,7 @@ eval(lval *args)
 	  "ERROR: Cannot eval a non-QEXP!");
   lval *x = lval_take(args, 0);
   x->type = LVAL_SEXP;
-  return lval_eval(x);
+  return lval_eval(e, x);
 }
 
 lval *
@@ -361,43 +416,56 @@ println_lval(lval *v) { print_lval(v); putchar('\n'); }
 
 // EVALUATION
 lval *
-lval_eval(lval *v) // evaluates an lval recursively
+lval_eval(lenv *e, lval *v) // evaluates an lval recursively
 {
-  if (v->type == LVAL_SEXP) {
-    if (v->count <= 1) return v; // return `()` and `(5)` as-is
-
-    // evaluate all children
-    for (int i = 0; i < v->count; i++) {
-      v->cell[i] = lval_eval(v->cell[i]);
-      if (v->cell[i]->type == LVAL_ERR)
-	return v->cell[i]; // handle errors
-    }
-
-    lval *first = lval_pop(v, 0); // pops off the first element
-    LASSERT(first, first->type == LVAL_SYM,
-	    "ERROR: Invalid function");
-    return builtin(first->sym, v); // evaluates `first` as a function with args = `v`
+  if (v->type == LVAL_SYM) { // look up symbols in the environment
+    lval* x = lenv_get(e, v->sym);
+    lval_del(v);
+    return x;
   }
+
+  if (v->type == LVAL_SEXP)
+    return lval_eval_sexp(e, v);
+
   return v;
 }
 
 lval *
-builtin(char *fn, lval *args)
+lval_eval_sexp(lenv *e, lval *v)
 {
-  if (strcmp(fn, "list") == 0) { return builtin_list(args); }
-  if (strcmp(fn, "head") == 0) { return builtin_head(args); }
-  if (strcmp(fn, "tail") == 0) { return builtin_tail(args); }
-  if (strcmp(fn, "join") == 0) { return builtin_join(args); }
-  if (strcmp(fn, "eval") == 0) { return eval(args); }
-  if (strcmp(fn, "cons") == 0) { return builtin_cons(args); }
-  if (strcmp(fn, "len") == 0) { return builtin_len(args); }
-  if (strstr("+-/*", fn)) { return builtin_op(fn, args); }
-  lval_del(args);
-  return lval_err("ERROR: Unknown function");
+  // evaluate children
+  for (int i = 0; i < v->count; i++) {
+    v->cell[i] = lval_eval(e, v->cell[i]);
+  }
+
+  // catch errors
+  for (int i = 0; i < v->count; i++) {
+    if (v->cell[i]->type == LVAL_ERR)
+      return v->cell[i];
+  }
+
+  if (v->count == 0)
+      return v; // return `()` and `(5)` as-is
+
+  if (v->count == 1) // don't agree with this but let's see how it plays out
+      return lval_take(v, 0);
+
+  lval *first = lval_pop(v, 0); // pops off the first element
+
+  if (first->type != LVAL_FN) {
+    lval_del(first);
+    lval_del(v);
+    return lval_err("ERROR: Invalid function");
+  }
+
+  lval *result = first->fn(e, v); // evaluate `first` as a function, args=v
+  lval_del(first);
+  return result;
 }
 
+
 lval *
-builtin_op(char *op, lval *args) // apply fn to args
+builtin_op(lenv *e, char *op, lval *args) // apply fn to args
 {
   for (int i = 0; i < args->count; i++) {
     LASSERT(args, args->cell[i]->type == LVAL_NUM,
@@ -505,21 +573,24 @@ main (int argc, char **argv)
 
   mpc_result_t r;
 
+  lenv* e = lenv_new(); // create the environment
+  lenv_add_builtins(e);
+
   while (1) {
     printf("> ");
     fgets(line, MAXLINE, stdin);
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
       println_lval(read(r.output));
-      println_lval(lval_eval(read(r.output)));
-
-      /* mpc_ast_print(r.output); */
+      println_lval(lval_eval(e, read(r.output)));
       mpc_ast_delete(r.output);
     } else { // catch syntax errors here
       mpc_err_print(r.error);
       mpc_err_delete(r.error);
     }
   }
+
+  lenv_del(e);
 
   mpc_cleanup(6, Symbol, Num, Exp, Sexp, Qexp, Input);
   putchar('\n');
