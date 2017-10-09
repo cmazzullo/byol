@@ -49,6 +49,7 @@ lval *builtin_head(lenv *env, lval *args);
 lval *builtin_tail(lenv *env, lval *args);
 lval *builtin_eval(lenv *env, lval *args);
 lval *builtin_join(lenv *env, lval *args);
+lval *builtin_def(lenv *env, lval *args);
 
 lval *builtin_add(lenv *env, lval *args);
 lval *builtin_sub(lenv *env, lval *args);
@@ -262,6 +263,7 @@ lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "tail", builtin_tail);
   lenv_add_builtin(e, "eval", builtin_eval);
   lenv_add_builtin(e, "join", builtin_join);
+  lenv_add_builtin(e, "def", builtin_def);
 
   lenv_add_builtin(e, "+", builtin_add);
   lenv_add_builtin(e, "-", builtin_sub);
@@ -487,6 +489,22 @@ builtin_op(lenv *e, char *op, lval *args) // apply fn to args
   }
   lval_del(args);
   return first;
+}
+
+// variable definition
+lval *
+builtin_def(lenv *e, lval *a)
+{
+  // a is a qexp containing a list of names + a number of values
+  lval *names = lval_pop(a, 0);
+  LASSERT(a, a->count == names->count,
+	  "ERROR: Number of names does not match number of values!");
+  for (int i = 0; i < a->count; i++) {
+    lenv_put(e, lval_copy(names->cell[i]), lval_copy(a->cell[i]));
+  }
+
+  lval_del(a);
+  return lval_sexp();
 }
 
 lval *
