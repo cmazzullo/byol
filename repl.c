@@ -5,10 +5,15 @@
 #include "mpc/mpc.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #define MAXLINE 1024
-#define LASSERT(args, cond, err) \
-  if (!(cond)) { lval_del(args); return lval_err(err); }
+#define LASSERT(args, cond, fmt, ...)		\
+  if (!(cond)) {				\
+    lval *err = lval_err(fmt, ##__VA_ARGS__);	\
+    lval_del(args);				\
+    return err;					\
+  }
 
 // Forward Declarations
 struct lval;
@@ -64,7 +69,7 @@ lval *lval_num(long x);
 lval *lval_sym(char *sym);
 lval *lval_sexp(void);
 lval *lval_qexp(void);
-lval *lval_err(char *err);
+lval *lval_err(char *fmt, ...);
 void print_lval(lval *v);
 void println_lval(lval *v);
 void print_lval_sexp(lval *v, char open, char close);
@@ -87,12 +92,18 @@ lval_num(long x) // create new number
 }
 
 lval *
-lval_err(char *err) // create new error
+lval_err(char *fmt, ...) // create new error
 {
   lval *v = malloc(sizeof(lval));
+
+  va_list ap;
+  va_start(ap, fmt);
+
+  v->err = malloc(MAXLINE * sizeof(char));
+  vsnprintf(v->err, MAXLINE, fmt, ap);
+  va_end(ap);
+
   v->type = LVAL_ERR;
-  v->err = malloc(strlen(err) + 1);
-  strcpy(v->err, err);
   return v;
 }
 
@@ -218,7 +229,7 @@ lenv_get(lenv *env, char *name)
     if (strcmp(name, env->names[i]) == 0)
       return lval_copy(env->vals[i]);
   }
-  return lval_err("ERROR: Variable not found");
+  return lval_err("ERROR: Variable `%s` not found", name);
 }
 
 // Add a name/value pair to the environment
@@ -495,10 +506,19 @@ builtin_op(lenv *e, char *op, lval *args) // apply fn to args
 lval *
 builtin_def(lenv *e, lval *a)
 {
-  // a is a qexp containing a list of names + a number of values
+  LASSERT(a, a->count > 0,
+	  "ERROR: Not enough arguments to `def`!");
   lval *names = lval_pop(a, 0);
   LASSERT(a, a->count == names->count,
 	  "ERROR: Number of names does not match number of values!");
+  LASSERT(names, names->type == LVAL_QEXP,
+	  "ERROR: Function `def` not passed a QEXP as argument 1!")
+  // a is a qexp containing a list of names + a number of values
+  for (int i = 0; i < a->count; i++) {
+    LASSERT(a, names->cell[i]->type == LVAL_SYM,
+	    "ERROR: Function `def` requires a list of symbols!");
+  }
+
   for (int i = 0; i < a->count; i++) {
     lenv_put(e, lval_copy(names->cell[i]), lval_copy(a->cell[i]));
   }
