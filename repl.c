@@ -14,6 +14,14 @@
     lval_del(args);				\
     return err;					\
   }
+#define LARGNUM(args, correctnum, funcname)				\
+  if (args->count != correctnum) {					\
+    lval *err = lval_err("ERROR: Function `%s` requires %d argument(s) (passed %d)!", \
+			 funcname, correctnum, args->count);		\
+  lval_del(args);							\
+return err;								\
+}									\
+
 
 // Forward Declarations
 struct lval;
@@ -49,6 +57,7 @@ struct lenv {
 // Function prototypes
 lval *lval_eval_sexp(lenv *e, lval *v);
 lval *lenv_get(lenv *env, char *name);
+lval *builtin_cons(lenv *env, lval *args);
 lval *builtin_list(lenv *env, lval *args);
 lval *builtin_head(lenv *env, lval *args);
 lval *builtin_tail(lenv *env, lval *args);
@@ -256,6 +265,21 @@ lenv_put(lenv *env, lval *name, lval *v)
   strcpy(env->names[env->count - 1], name->sym);
 }
 
+// Given an lval type, return its name
+char *
+ltype_name(int t)
+{
+  switch(t) {
+  case LVAL_NUM: return "num";
+  case LVAL_ERR: return "err";
+  case LVAL_SYM: return "sym";
+  case LVAL_SEXP: return "sexp";
+  case LVAL_QEXP: return "qexp";
+  case LVAL_FN: return "fn";
+  default: return "unknown";
+  }
+}
+
 // BUILTIN FUNCTIONS
 void
 lenv_add_builtin(lenv *e, char *name, lbuiltin fn)
@@ -277,6 +301,7 @@ lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "join", builtin_join);
   lenv_add_builtin(e, "def", builtin_def);
   lenv_add_builtin(e, "len", builtin_len);
+  lenv_add_builtin(e, "cons", builtin_cons);
 
   lenv_add_builtin(e, "+", builtin_add);
   lenv_add_builtin(e, "-", builtin_sub);
@@ -318,10 +343,10 @@ builtin_list(lenv *e, lval *args) // Takes one or more args, returns a qexp cont
 lval *
 builtin_head(lenv *e, lval *args) // Returns the first element of a qexp
 {
-  LASSERT(args, args->count == 1,
-	  "ERROR: Function head passed too many arguments!");
+  LARGNUM(args, 1, "head");
   LASSERT(args, args->cell[0]->type == LVAL_QEXP,
-	  "ERROR: Cannot take head of a non-QEXP!");
+	  "ERROR: Cannot take head of a non-QEXP! (recieved `%s`)",
+	  ltype_name(args->cell[0]->type));
   LASSERT(args, args->cell[0]->count != 0,
 	  "ERROR: Cannot take head of an empty QEXP!");
 
@@ -333,8 +358,7 @@ builtin_head(lenv *e, lval *args) // Returns the first element of a qexp
 lval *
 builtin_tail(lenv *e, lval *args) // Returns the cdr of a qexp
 {
-  LASSERT(args, args->count == 1,
-	  "ERROR: Function tail passed too many arguments!");
+  LARGNUM(args, 1,"tail");
   LASSERT(args, args->cell[0]->type == LVAL_QEXP,
 	  "ERROR: Cannot take tail of a non-QEXP!");
   LASSERT(args, args->cell[0]->count != 0,
@@ -348,9 +372,9 @@ builtin_tail(lenv *e, lval *args) // Returns the cdr of a qexp
 lval *
 builtin_join(lenv *e, lval *args) // Join together one or more qexps
 {
+  // LARGNUM(args, >0, "join");
   LASSERT(args, args->count != 0,
 	  "ERROR: Function join passed 0 arguments!");
-
   lval *v = lval_qexp();
   while (args->count > 0) {
     lval *a = lval_pop(args, 0);
@@ -367,8 +391,7 @@ builtin_join(lenv *e, lval *args) // Join together one or more qexps
 lval *
 builtin_eval(lenv *e, lval *args)
 {
-  LASSERT(args, args->count == 1,
-	  "ERROR: Function eval passed too many arguments!");
+  LARGNUM(args, 1, "eval");
   LASSERT(args, args->cell[0]->type == LVAL_QEXP,
 	  "ERROR: Cannot eval a non-QEXP!");
   lval *x = lval_take(args, 0);
@@ -377,11 +400,9 @@ builtin_eval(lenv *e, lval *args)
 }
 
 lval *
-builtin_cons(lval *args)
+builtin_cons(lenv *e, lval *args)
 {
-  LASSERT(args, args->count == 2,
-	  "ERROR: Cons function requires 2 arguments (recieved %d)",
-	  args->count);
+  LARGNUM(args, 2, "cons");
   LASSERT(args, args->cell[1]->type == LVAL_QEXP,
 	  "ERROR: Cons function requires a QEXP as a second argument");
   lval *q = lval_qexp();
@@ -394,9 +415,7 @@ builtin_cons(lval *args)
 lval *
 builtin_len(lenv *e, lval *args)
 {
-  LASSERT(args, args->count == 1,
-	  "ERROR: Len function needs exactly 1 argument (recieved %d)",
-	  args->count);
+  LARGNUM(args, 1, "len");
   LASSERT(args, args->cell[0]->type == LVAL_QEXP,
 	  "ERROR: Argument to len function was not a QEXP");
 
