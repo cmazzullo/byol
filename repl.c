@@ -55,6 +55,7 @@ lval *builtin_tail(lenv *env, lval *args);
 lval *builtin_eval(lenv *env, lval *args);
 lval *builtin_join(lenv *env, lval *args);
 lval *builtin_def(lenv *env, lval *args);
+lval *builtin_len(lenv *env, lval *args);
 
 lval *builtin_add(lenv *env, lval *args);
 lval *builtin_sub(lenv *env, lval *args);
@@ -275,6 +276,7 @@ lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "eval", builtin_eval);
   lenv_add_builtin(e, "join", builtin_join);
   lenv_add_builtin(e, "def", builtin_def);
+  lenv_add_builtin(e, "len", builtin_len);
 
   lenv_add_builtin(e, "+", builtin_add);
   lenv_add_builtin(e, "-", builtin_sub);
@@ -378,9 +380,10 @@ lval *
 builtin_cons(lval *args)
 {
   LASSERT(args, args->count == 2,
-	  "ERROR: Cons function did not recieve 2 arguments");
+	  "ERROR: Cons function requires 2 arguments (recieved %d)",
+	  args->count);
   LASSERT(args, args->cell[1]->type == LVAL_QEXP,
-	  "ERROR: Second argument to cons function was not a QEXP");
+	  "ERROR: Cons function requires a QEXP as a second argument");
   lval *q = lval_qexp();
   lval_add(q, args->cell[0]);
   lval *a = lval_pop(args, 1);
@@ -389,10 +392,11 @@ builtin_cons(lval *args)
 }
 
 lval *
-builtin_len(lval *args)
+builtin_len(lenv *e, lval *args)
 {
   LASSERT(args, args->count == 1,
-	  "ERROR: Len function needs exactly 1 argument");
+	  "ERROR: Len function needs exactly 1 argument (recieved %d)",
+	  args->count);
   LASSERT(args, args->cell[0]->type == LVAL_QEXP,
 	  "ERROR: Argument to len function was not a QEXP");
 
