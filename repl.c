@@ -1,5 +1,5 @@
 /*
-  A well-behaved REPL
+  A small Lispoid REPL
 */
 
 #include "mpc/mpc.h"
@@ -38,11 +38,19 @@ enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP,
 
 struct lval { // lisp value
   int type;
+
+  /* Basic */
   long num;
   char* err;
   char* sym;
-  lbuiltin fn;
 
+  /* Function */
+  lbuiltin builtin;
+  lenv *env;
+  lval *formals;
+  lval *body;
+
+  /* Expression */
   int count;
   lval **cell;
 };
@@ -92,6 +100,7 @@ lval *builtin(lenv *e, lval *fn, lval *args);
 
 
 // CONSTRUCTORS
+// Basic
 lval *
 lval_num(long x) // create new number
 {
@@ -127,6 +136,31 @@ lval_sym(char *sym) // create new symbol
   return v;
 }
 
+// Function
+lval *
+lval_lambda(lval *formals, lval *body)
+{
+  lval *v = malloc(sizeof(lval));
+  v->type = LVAL_FN;
+  v->builtin = NULL; // no builtin, this is a user defined func
+
+  v->formals = formals;
+  v->body = body;
+  v->env = lenv_new();
+
+  return v
+}
+
+lval *
+lval_fn(lbuiltin fn)
+{
+  lval *v = malloc(sizeof(lval));
+  v->type = LVAL_FN;
+  v->builtin = fn;
+  return v;
+}
+
+// Expression
 lval *
 lval_sexp(void) // create new empty sexp
 {
@@ -147,30 +181,31 @@ lval_qexp(void) // create new empty qexp
   return v;
 }
 
-lval *
-lval_fn(lbuiltin fn)
-{
-  lval *v = malloc(sizeof(lval));
-  v->type = LVAL_FN;
-  v->fn = fn;
-  return v;
-}
-
 // DESTRUCTOR
 void
 lval_del(lval *v) // free memory for an lval
 {
   switch(v->type) {
   case LVAL_NUM: break;
-  case LVAL_FN: break;
-  case LVAL_ERR: free(v->err); break;
-  case LVAL_SYM: free(v->sym); break;
+  case LVAL_FN:
+    if (!v->builtin) {
+      lval_del(v->env);
+      lval_del(v->formals);
+      lval_del(v->body);
+    }
+    break;
+  case LVAL_ERR:
+    free(v->err);
+    break;
+  case LVAL_SYM:
+    free(v->sym);
+    break;
   case LVAL_SEXP:
   case LVAL_QEXP:
     for (int i = 0; i < v->count; i++) {
       lval_del(v->cell[i]);
     }
-  free(v->cell);
+    free(v->cell);
   }
   free(v);
 }
@@ -183,7 +218,14 @@ lval_copy(lval *v)
 
   switch (v->type) {
   case LVAL_NUM: x->num = v->num; break;
-  case LVAL_FN: x->fn = v->fn; break;
+  case LVAL_FN:
+    x->builtin = v->builtin;
+    if (!v->builtin) {
+      x->formals = lval_copy(v->formals);
+      x->body = lval_copy(v->body);
+      x->env = lenv_copy(v->env);
+    }
+    break;
 
   case LVAL_ERR:
     x->err = malloc((strlen(v->err) + 1) * sizeof(char));
@@ -494,7 +536,7 @@ lval_eval_sexp(lenv *e, lval *v)
     return lval_err("ERROR: Invalid function");
   }
 
-  lval *result = first->fn(e, v); // evaluate `first` as a function, args=v
+  lval *result = first->builtin(e, v); // evaluate `first` as a function, args=v
   lval_del(first);
   return result;
 }
