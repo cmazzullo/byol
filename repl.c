@@ -226,7 +226,6 @@ lval_copy(lval *v)
       x->env = lenv_copy(v->env);
     }
     break;
-
   case LVAL_ERR:
     x->err = malloc((strlen(v->err) + 1) * sizeof(char));
     strcpy(x->err, v->err);
@@ -235,8 +234,6 @@ lval_copy(lval *v)
     x->sym = malloc((strlen(v->sym) + 1) * sizeof(char));
     strcpy(x->sym, v->sym);
     break;
-    //complicated
-    // first, run
   case LVAL_SEXP:
   case LVAL_QEXP:
     x->count = v->count;
@@ -246,7 +243,6 @@ lval_copy(lval *v)
     }
     break;
   }
-
   return x;
 }
 
@@ -271,6 +267,17 @@ lenv_del(lenv *env)
   free(env->names);
   free(env->vals);
   free(env);
+}
+
+lenv *
+lenv_copy(lenv *env)
+{
+  lenv *x = lenv_new();
+  for (int i = 0; i < env->count; i++) {
+    char *s = malloc(MAXLINE * sizeof(char));
+    lenv_put(x, env->names[i], env->vals[i]);
+  }
+  return x;
 }
 
 // Get a value from the environment
@@ -306,6 +313,7 @@ lenv_put(lenv *env, lval *name, lval *v)
   env->names[env->count - 1] = malloc(strlen(name->sym) + 1);
   strcpy(env->names[env->count - 1], name->sym);
 }
+
 
 // Given an lval type, return its name
 char *
