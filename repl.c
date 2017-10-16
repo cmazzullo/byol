@@ -478,7 +478,14 @@ print_lval(lval *v)
 {
   switch (v->type) {
   case LVAL_NUM: printf("%li", v->num); break;
-  case LVAL_FN: printf("<function>"); break;
+  case LVAL_FN:
+    if (v->builtin) {
+      printf("<builtin>");
+    } else {
+      printf("(\\ "); lval_print(v->formals);
+      putchar(' '); lval_print(v->body); putchar(')');
+    }
+    break;
   case LVAL_ERR: printf(v->err); break;
   case LVAL_SYM: printf(v->sym); break;
   case LVAL_SEXP: print_lval_sexp(v, '(', ')'); break;
