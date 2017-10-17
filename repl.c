@@ -274,7 +274,6 @@ lenv_copy(lenv *env)
 {
   lenv *x = lenv_new();
   for (int i = 0; i < env->count; i++) {
-    char *s = malloc(MAXLINE * sizeof(char));
     lenv_put(x, env->names[i], env->vals[i]);
   }
   return x;
@@ -314,17 +313,6 @@ lenv_put(lenv *env, lval *name, lval *v)
   strcpy(env->names[env->count - 1], name->sym);
 }
 
-// Copy an environment
-lenv *
-lenv_copy(lenv *e)
-{
-  lenv *x = lenv_new();
-  for (int i = 0; i < e->count; i++) {
-    lenv_put(x, lval_sym(e->names[i]), lval_copy(e->vals[i]));
-  }
-  return x;
-}
-
 // Given an lval type, return its name
 char *
 ltype_name(int t)
@@ -345,14 +333,24 @@ ltype_name(int t)
 lval *
 builtin_lambda(lenv *e, lval *args)
 {
-  lval *arglist = lval_pop(args, 0);
-  lenv *newenv = lenv_copy(e);
+  // Make sure `formals` contains only symbols
+  lval *formals = lval_pop(args, 0);
+  for (int i = 0; i < args->count; i++) {
+  LASSERT(args, args->cell[i]->type == LVAL_SYM,
+	  "ERROR: Function `lambda` recieved an argument of type %s (`%s` required)",
+	  ltype_name(args->cell[i]->type)), ltype_name(LVAL_SYM);
+  }
   while (arglist->count > 0) {
     lval *k = lval_pop(arglist, 0);
     lval *v = builtin_eval(e, k);
     lenv_put(newenv, k, v);
   }
-  return builtin_eval(newenv, args);
+
+
+  lenv *body = lval_pop(args, 0);
+  lval_del(args);
+
+  return lval_lambda(formals, body);
 }
 
 void
