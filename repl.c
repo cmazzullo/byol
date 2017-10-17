@@ -265,6 +265,17 @@ lenv_put(lenv *env, lval *name, lval *v)
   strcpy(env->names[env->count - 1], name->sym);
 }
 
+// Copy an environment
+lenv *
+lenv_copy(lenv *e)
+{
+  lenv *x = lenv_new();
+  for (int i = 0; i < e->count; i++) {
+    lenv_put(x, lval_sym(e->names[i]), lval_copy(e->vals[i]));
+  }
+  return x;
+}
+
 // Given an lval type, return its name
 char *
 ltype_name(int t)
@@ -281,6 +292,20 @@ ltype_name(int t)
 }
 
 // BUILTIN FUNCTIONS
+
+lval *
+builtin_lambda(lenv *e, lval *args)
+{
+  lval *arglist = lval_pop(args, 0);
+  lenv *newenv = lenv_copy(e);
+  while (arglist->count > 0) {
+    lval *k = lval_pop(arglist, 0);
+    lval *v = builtin_eval(e, k);
+    lenv_put(newenv, k, v);
+  }
+  return builtin_eval(newenv, args);
+}
+
 void
 lenv_add_builtin(lenv *e, char *name, lbuiltin fn)
 {
@@ -302,6 +327,7 @@ lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "def", builtin_def);
   lenv_add_builtin(e, "len", builtin_len);
   lenv_add_builtin(e, "cons", builtin_cons);
+  lenv_add_builtin(e, "lambda", builtin_lambda);
 
   lenv_add_builtin(e, "+", builtin_add);
   lenv_add_builtin(e, "-", builtin_sub);
