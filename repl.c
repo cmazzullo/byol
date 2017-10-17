@@ -8,19 +8,31 @@
 #include <stdarg.h>
 
 #define MAXLINE 1024
+
 #define LASSERT(args, cond, fmt, ...)		\
   if (!(cond)) {				\
     lval *err = lval_err(fmt, ##__VA_ARGS__);	\
     lval_del(args);				\
     return err;					\
   }
+
 #define LARGNUM(args, correctnum, funcname)				\
   if (args->count != correctnum) {					\
     lval *err = lval_err("ERROR: Function `%s` requires %d argument(s) (passed %d)!", \
 			 funcname, correctnum, args->count);		\
-  lval_del(args);							\
-return err;								\
-}									\
+    lval_del(args);							\
+    return err;								\
+  }
+
+#define TYPEASSERT(args, recievedtype, righttype, funcname)		\
+  if (recievedtype != righttype) {					\
+    lval *err = lval_err("ERROR: Function `%s` requires argument(s) of type %s (passed %s)!", \
+			 funcname,					\
+			 ltype_name(righttype),				\
+			 ltype_name(recievedtype));			\
+    lval_del(args);							\
+    return err;								\
+  }
 
 
 // Forward Declarations
@@ -63,41 +75,40 @@ struct lenv {
 
 
 // Function prototypes
-lval *lval_eval_sexp(lenv *e, lval *v);
-lval *lenv_get(lenv *env, char *name);
-lval *builtin_cons(lenv *env, lval *args);
-lval *builtin_list(lenv *env, lval *args);
-lval *builtin_head(lenv *env, lval *args);
-lval *builtin_tail(lenv *env, lval *args);
-lval *builtin_eval(lenv *env, lval *args);
-lval *builtin_join(lenv *env, lval *args);
-lval *builtin_def(lenv *env, lval *args);
-lval *builtin_len(lenv *env, lval *args);
-
-lval *builtin_add(lenv *env, lval *args);
-lval *builtin_sub(lenv *env, lval *args);
-lval *builtin_multiply(lenv *env, lval *args);
-lval *builtin_divide(lenv *env, lval *args);
-lval *builtin_op(lenv *e, char *op, lval *args);
-
+lval *lval_lambda(lval *formals, lval *body);
+lval *lval_fn(lbuiltin fn);
 lval *lval_copy(lval *v);
-lval *lval_eval(lenv *e, lval *v);
-lval *lval_eval_op(lval *x, lval *op, lval *y);
-lval *lval_num(long x);
-lval *lval_sym(char *sym);
-lval *lval_sexp(void);
-lval *lval_qexp(void);
-lval *lval_err(char *fmt, ...);
+lenv *lenv_new(void);
+void lenv_del(lenv *env);
+lenv *lenv_copy(lenv *env);
+lval *lenv_get(lenv *env, char *name);
+void lenv_put(lenv *env, lval *name, lval *v);
+char *ltype_name(int t);
+lval *builtin_lambda(lenv *e, lval *args);
+lval *builtin_list(lenv *e, lval *args);
+lval *builtin_head(lenv *e, lval *args);
+lval *builtin_tail(lenv *e, lval *args);
+lval *builtin_def(lenv *e, lval *args);
+lval *builtin_join(lenv *e, lval *args);
+void lenv_add_builtin(lenv *e, char *name, lbuiltin fn);
+void lenv_add_builtins(lenv *e);
+lval *builtin_add(lenv *e, lval *args);
+lval *builtin_sub(lenv *e, lval *args);
+lval *builtin_multiply(lenv *e, lval *args);
+lval *builtin_divide(lenv *e, lval *args);
+lval *builtin_eval(lenv *e, lval *args);
+lval *builtin_cons(lenv *e, lval *args);
+lval *builtin_len(lenv *e, lval *args);
 void print_lval(lval *v);
-void println_lval(lval *v);
 void print_lval_sexp(lval *v, char open, char close);
-void lval_del(lval *v);
-lval *read_num(mpc_ast_t *t);
-lval *lval_add(lval *v, lval *x);
+lval *lval_eval_sexp(lenv *e, lval *v);
+lval *builtin_def(lenv *e, lval *a);
 lval *lval_pop(lval *v, int i);
+lval *lval_add(lval *v, lval *x);
+lval *builtin_op(lenv *e, char *op, lval *args);
 lval *lval_take(lval *v, int i);
-lval *builtin(lenv *e, lval *fn, lval *args);
-
+lval *lval_eval(lenv *e, lval *v);
+lval * read_num(mpc_ast_t *t);
 
 // CONSTRUCTORS
 // Basic
@@ -148,7 +159,7 @@ lval_lambda(lval *formals, lval *body)
   v->body = body;
   v->env = lenv_new();
 
-  return v
+  return v;
 }
 
 lval *
@@ -189,7 +200,7 @@ lval_del(lval *v) // free memory for an lval
   case LVAL_NUM: break;
   case LVAL_FN:
     if (!v->builtin) {
-      lval_del(v->env);
+      lenv_del(v->env);
       lval_del(v->formals);
       lval_del(v->body);
     }
@@ -274,7 +285,7 @@ lenv_copy(lenv *env)
 {
   lenv *x = lenv_new();
   for (int i = 0; i < env->count; i++) {
-    lenv_put(x, env->names[i], env->vals[i]);
+    lenv_put(x, lval_sym(env->names[i]), env->vals[i]);
   }
   return x;
 }
@@ -336,18 +347,10 @@ builtin_lambda(lenv *e, lval *args)
   // Make sure `formals` contains only symbols
   lval *formals = lval_pop(args, 0);
   for (int i = 0; i < args->count; i++) {
-  LASSERT(args, args->cell[i]->type == LVAL_SYM,
-	  "ERROR: Function `lambda` recieved an argument of type %s (`%s` required)",
-	  ltype_name(args->cell[i]->type)), ltype_name(LVAL_SYM);
-  }
-  while (arglist->count > 0) {
-    lval *k = lval_pop(arglist, 0);
-    lval *v = builtin_eval(e, k);
-    lenv_put(newenv, k, v);
+    TYPEASSERT(args, args->cell[i]->type, LVAL_SYM, "lambda");
   }
 
-
-  lenv *body = lval_pop(args, 0);
+  lval *body = lval_pop(args, 0);
   lval_del(args);
 
   return lval_lambda(formals, body);
@@ -356,10 +359,8 @@ builtin_lambda(lenv *e, lval *args)
 void
 lenv_add_builtin(lenv *e, char *name, lbuiltin fn)
 {
-  lval *k = lval_sym(name);
   lval *v = lval_fn(fn);
-  lenv_put(e, k, v);
-  lval_del(k);
+  lenv_put(e, lval_sym(name), v);
   lval_del(v);
 }
 
@@ -505,8 +506,8 @@ print_lval(lval *v)
     if (v->builtin) {
       printf("<builtin>");
     } else {
-      printf("(\\ "); lval_print(v->formals);
-      putchar(' '); lval_print(v->body); putchar(')');
+      printf("(\\ "); print_lval(v->formals);
+      putchar(' '); print_lval(v->body); putchar(')');
     }
     break;
   case LVAL_ERR: printf(v->err); break;
