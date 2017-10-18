@@ -71,6 +71,8 @@ struct lenv {
   int count;
   lval **vals;
   char **names;
+
+  lenv *par;
 };
 
 
@@ -89,6 +91,8 @@ lval *builtin_list(lenv *e, lval *args);
 lval *builtin_head(lenv *e, lval *args);
 lval *builtin_tail(lenv *e, lval *args);
 lval *builtin_def(lenv *e, lval *args);
+lval *builtin_put(lenv *e, lval *a);
+lval *builtin_var(lenv *e, lval *a, char *func);
 lval *builtin_join(lenv *e, lval *args);
 void lenv_add_builtin(lenv *e, char *name, lbuiltin fn);
 void lenv_add_builtins(lenv *e);
@@ -265,6 +269,7 @@ lenv_new(void)
   env->count = 0;
   env->names = NULL;
   env->vals = NULL;
+  env->par = NULL;
   return env;
 }
 
@@ -284,6 +289,12 @@ lenv *
 lenv_copy(lenv *env)
 {
   lenv *x = lenv_new();
+
+  x->par = env->par;
+  x->count = env->count;
+  x->names = malloc(sizeof(char *) * env->count);
+  x->vals = malloc(sizeof(lval *) * env->count);
+
   for (int i = 0; i < env->count; i++) {
     lenv_put(x, lval_sym(env->names[i]), env->vals[i]);
   }
@@ -297,6 +308,11 @@ lenv_get(lenv *env, char *name)
   for (int i = 0; i < env->count; i++) {
     if (strcmp(name, env->names[i]) == 0)
       return lval_copy(env->vals[i]);
+  }
+
+  // search parent environment if variable isn't found
+  if (env->par) {
+    return lenv_get(env->par, name);
   }
   return lval_err("ERROR: Variable `%s` not found", name);
 }
@@ -324,6 +340,18 @@ lenv_put(lenv *env, lval *name, lval *v)
   strcpy(env->names[env->count - 1], name->sym);
 }
 
+// Define a variable in the global environment (the one at the top of
+// the parent chain
+void
+lenv_def(lenv *env, lval *k, lval *v)
+{
+  if (env->par) {
+    lenv_def(env->par, k, v);
+  } else {
+    lenv_put(env, k, v);
+  }
+}
+
 // Given an lval type, return its name
 char *
 ltype_name(int t)
@@ -347,7 +375,7 @@ builtin_lambda(lenv *e, lval *args)
   // Make sure `formals` contains only symbols
   lval *formals = lval_pop(args, 0);
   for (int i = 0; i < args->count; i++) {
-    TYPEASSERT(args, args->cell[i]->type, LVAL_SYM, "lambda");
+    TYPEASSERT(args, formals->cell[i]->type, LVAL_SYM, "lambda");
   }
 
   lval *body = lval_pop(args, 0);
@@ -373,6 +401,7 @@ lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "eval", builtin_eval);
   lenv_add_builtin(e, "join", builtin_join);
   lenv_add_builtin(e, "def", builtin_def);
+  lenv_add_builtin(e, "=", builtin_put);
   lenv_add_builtin(e, "len", builtin_len);
   lenv_add_builtin(e, "cons", builtin_cons);
   lenv_add_builtin(e, "lambda", builtin_lambda);
@@ -562,7 +591,7 @@ lval_eval_sexp(lenv *e, lval *v)
   }
 
   if (v->count == 0)
-      return v; // return `()` and `(5)` as-is
+      return v; // return `()` as-is
 
   if (v->count == 1) // don't agree with this but let's see how it plays out
       return lval_take(v, 0);
@@ -606,25 +635,43 @@ builtin_op(lenv *e, char *op, lval *args) // apply fn to args
   return first;
 }
 
-// variable definition
+// Global variable definition
 lval *
 builtin_def(lenv *e, lval *a)
 {
+  return builtin_var(e, a, "def");
+}
+
+// Local variable definition
+lval *
+builtin_put(lenv *e, lval *a)
+{
+  return builtin_var(e, a, "put");
+}
+
+// Variable definition helper function
+lval *
+builtin_var(lenv *e, lval *a, char *func)
+{
   LASSERT(a, a->count > 0,
-	  "ERROR: Not enough arguments to `def`!");
+	  "ERROR: Not enough arguments to `%s`!", func);
   lval *names = lval_pop(a, 0);
   LASSERT(a, a->count == names->count,
 	  "ERROR: Number of names does not match number of values!");
   LASSERT(names, names->type == LVAL_QEXP,
-	  "ERROR: Function `def` not passed a QEXP as argument 1!")
+	  "ERROR: Function `%s` not passed a QEXP as argument 1!", func)
   // a is a qexp containing a list of names + a number of values
   for (int i = 0; i < a->count; i++) {
     LASSERT(a, names->cell[i]->type == LVAL_SYM,
-	    "ERROR: Function `def` requires a list of symbols!");
+	    "ERROR: Function `%s` requires a list of symbols!", func);
   }
 
   for (int i = 0; i < a->count; i++) {
-    lenv_put(e, lval_copy(names->cell[i]), lval_copy(a->cell[i]));
+    if (strcmp(func, "def") == 0) {
+      lenv_def(e, lval_copy(names->cell[i]), lval_copy(a->cell[i]));
+    } else if (strcmp(func, "put") == 0) {
+      lenv_put(e, lval_copy(names->cell[i]), lval_copy(a->cell[i]));
+    }
   }
 
   lval_del(a);
