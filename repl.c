@@ -581,6 +581,7 @@ println_lval(lval *v) { print_lval(v); putchar('\n'); }
 lval *
 lval_eval(lenv *e, lval *v) // evaluates an lval recursively
 {
+  printf("eval recieved type `%s`\n", ltype_name(v->type));
   if (v->type == LVAL_SYM) { // look up symbols in the environment
     lval* x = lenv_get(e, v->sym);
     lval_del(v);
@@ -715,12 +716,17 @@ lval_take(lval *v, int i) // like pop but delete the resulting list
 lval *
 read(mpc_ast_t *t) // convert the AST into a sexp
 {
+  // if the tree is the root, return its first child
+  if (strcmp(t->tag, ">") == 0) {
+    return read(t->children[1]);
+  }
+
   if (strstr(t->tag, "num")) { return read_num(t); }
   if (strstr(t->tag, "sym")) { return lval_sym(t->contents); }
 
-  // if the tree is the root or a sexp then create an empty sexp
+  // if the tree a sexp then create an empty sexp
   lval *v;
-  if ((strcmp(t->tag, ">") == 0) || (strstr(t->tag, "sexp"))) {
+  if (strstr(t->tag, "sexp")) {
     v = lval_sexp();
   }
   else if (strstr(t->tag, "qexp")) {
@@ -772,7 +778,7 @@ main (int argc, char **argv)
   sexp: '(' <exp>* ')' ;						\
   qexp: '{' <exp>* '}' ;						\
   exp: <num> | <symbol> | <sexp> | <qexp> ; \
-  input: /^/ <exp>* /$/ ;", Num, Symbol, Sexp, Qexp, Exp, Input);
+  input: /^/ <exp>? /$/ ;", Num, Symbol, Sexp, Qexp, Exp, Input);
 
   mpc_result_t r;
 
