@@ -200,17 +200,36 @@ lval_qexp(void) // create new empty qexp
 lval* // calls a user-defined function
 lval_call(lenv *e, lval *f, lval *a)
 {
+
   if (f->builtin)
     return f->builtin(e, a);
 
-  for (int i = 0; i < a->count; i++) {
-    lenv_put(f->env, f->formals->cell[i], a->cell[i]);
+  // record argument counts
+  int given = a->count;
+  int total = f->formals->count;
+
+  while (a->count > 0) {
+    // Check for extra arguments
+    if (f->formals->count == 0) {
+      lval_del(a);
+      return lval_err("Function passed too many arguments. "
+		      "Got %i, expected %i.", given, total);
+    }
+    lval *val = lval_pop(a, 0);
+    lval *formal = lval_pop(f->formals, 0);
+    lenv_put(f->env, formal, val);
+    lval_del(val);
+    lval_del(formal);
   }
 
-  lval_del(a);
+    lval_del(a);
 
-  f->env->par = e;
-  return builtin_eval(f->env, lval_add(lval_sexp(), lval_copy(f->body)));
+  if (f->formals->count == 0) {
+    f->env->par = e;
+    return builtin_eval(f->env, lval_add(lval_sexp(), lval_copy(f->body)));
+  } else {
+    return lval_copy(f);
+  }
 }
 
 // DESTRUCTOR
@@ -348,7 +367,7 @@ lenv_put(lenv *env, lval *name, lval *v)
   }
 
   // Add size to the arrays in env by realloc'ing
-  ++(env->count);
+  env->count++;
   env->names = realloc(env->names, env->count * sizeof(char *));
   env->vals = realloc(env->vals, env->count * sizeof(lval *));
 
@@ -421,7 +440,7 @@ lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "=", builtin_put);
   lenv_add_builtin(e, "len", builtin_len);
   lenv_add_builtin(e, "cons", builtin_cons);
-  lenv_add_builtin(e, "lambda", builtin_lambda);
+  lenv_add_builtin(e, "\\", builtin_lambda);
 
   lenv_add_builtin(e, "+", builtin_add);
   lenv_add_builtin(e, "-", builtin_sub);
@@ -581,7 +600,6 @@ println_lval(lval *v) { print_lval(v); putchar('\n'); }
 lval *
 lval_eval(lenv *e, lval *v) // evaluates an lval recursively
 {
-  printf("eval recieved type `%s`\n", ltype_name(v->type));
   if (v->type == LVAL_SYM) { // look up symbols in the environment
     lval* x = lenv_get(e, v->sym);
     lval_del(v);
@@ -620,7 +638,8 @@ lval_eval_sexp(lenv *e, lval *v)
   }
 
   lval *result = lval_call(e, first, v);
-  lval_del(first);
+  // memory leak here?
+  //lval_del(first);
   return result;
 }
 
