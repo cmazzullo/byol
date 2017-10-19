@@ -113,6 +113,7 @@ lval *builtin_op(lenv *e, char *op, lval *args);
 lval *lval_take(lval *v, int i);
 lval *lval_eval(lenv *e, lval *v);
 lval * read_num(mpc_ast_t *t);
+void lval_del(lval *v);
 
 // CONSTRUCTORS
 // Basic
@@ -194,6 +195,22 @@ lval_qexp(void) // create new empty qexp
   v->count = 0;
   v->cell = NULL;
   return v;
+}
+
+lval* // calls a user-defined function
+lval_call(lenv *e, lval *f, lval *a)
+{
+  if (f->builtin)
+    return f->builtin(e, a);
+
+  for (int i = 0; i < a->count; i++) {
+    lenv_put(f->env, f->formals->cell[i], a->cell[i]);
+  }
+
+  lval_del(a);
+
+  f->env->par = e;
+  return builtin_eval(f->env, lval_add(lval_sexp(), lval_copy(f->body)));
 }
 
 // DESTRUCTOR
@@ -593,9 +610,6 @@ lval_eval_sexp(lenv *e, lval *v)
   if (v->count == 0)
       return v; // return `()` as-is
 
-  if (v->count == 1) // don't agree with this but let's see how it plays out
-      return lval_take(v, 0);
-
   lval *first = lval_pop(v, 0); // pops off the first element
 
   if (first->type != LVAL_FN) {
@@ -604,7 +618,7 @@ lval_eval_sexp(lenv *e, lval *v)
     return lval_err("ERROR: Invalid function");
   }
 
-  lval *result = first->builtin(e, v); // evaluate `first` as a function, args=v
+  lval *result = lval_call(e, first, v);
   lval_del(first);
   return result;
 }
@@ -724,7 +738,7 @@ read(mpc_ast_t *t) // convert the AST into a sexp
   return v;
 }
 
-lval *
+lval * // append x to list v
 lval_add(lval *v, lval *x)
 {
   ++(v->count);
