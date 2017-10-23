@@ -442,7 +442,7 @@ builtin_lambda(lenv *e, lval *args)
 {
   // Make sure `formals` contains only symbols
   lval *formals = lval_pop(args, 0);
-  for (int i = 0; i < args->count; i++) {
+ for (int i = 0; i < formals->count; i++) {
     TYPEASSERT(args, formals->cell[i]->type, LVAL_SYM, "lambda");
   }
 
