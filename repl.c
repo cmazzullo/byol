@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdbool.h> // for boolean values
 
 #define MAXLINE 1024
 
@@ -46,8 +47,6 @@ typedef lval*(*lbuiltin)(lenv *, lval *);
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP,
        LVAL_QEXP, LVAL_FN, LVAL_BOOL };
 
-enum { TRUE, FALSE };
-
 // Structs
 
 struct lval { // lisp value
@@ -55,7 +54,7 @@ struct lval { // lisp value
 
   /* Basic */
   long num;
-  short int bool;
+  bool boolean;
   char* err;
   char* sym;
 
@@ -201,11 +200,11 @@ lval_qexp(void) // create new empty qexp
 }
 
 lval *
-lval_bool(char bool)
+lval_bool(bool boolean)
 {
   lval *v = malloc(sizeof(lval));
   v->type = LVAL_BOOL;
-  v->bool = bool;
+  v->boolean = boolean;
   return v;
 }
 
