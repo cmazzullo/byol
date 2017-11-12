@@ -44,7 +44,9 @@ typedef lval*(*lbuiltin)(lenv *, lval *);
 
 // Enums
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP,
-       LVAL_QEXP, LVAL_FN };
+       LVAL_QEXP, LVAL_FN, LVAL_BOOL };
+
+enum { TRUE, FALSE };
 
 // Structs
 
@@ -53,6 +55,7 @@ struct lval { // lisp value
 
   /* Basic */
   long num;
+  short int bool;
   char* err;
   char* sym;
 
@@ -194,6 +197,15 @@ lval_qexp(void) // create new empty qexp
   v->type = LVAL_QEXP;
   v->count = 0;
   v->cell = NULL;
+  return v;
+}
+
+lval *
+lval_bool(char bool)
+{
+  lval *v = malloc(sizeof(lval));
+  v->type = LVAL_BOOL;
+  v->bool = bool;
   return v;
 }
 
