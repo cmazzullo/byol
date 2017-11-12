@@ -97,6 +97,7 @@ lval *builtin_def(lenv *e, lval *args);
 lval *builtin_put(lenv *e, lval *a);
 lval *builtin_var(lenv *e, lval *a, char *func);
 lval *builtin_join(lenv *e, lval *args);
+lval *builtin_if(lenv *e, lval *args);
 void lenv_add_builtin(lenv *e, char *name, lbuiltin fn);
 void lenv_add_builtins(lenv *e);
 lval *builtin_add(lenv *e, lval *args);
@@ -490,6 +491,7 @@ lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "len", builtin_len);
   lenv_add_builtin(e, "cons", builtin_cons);
   lenv_add_builtin(e, "\\", builtin_lambda);
+  lenv_add_builtin(e, "if", builtin_if);
 
   lenv_add_builtin(e, "+", builtin_add);
   lenv_add_builtin(e, "-", builtin_sub);
@@ -611,6 +613,29 @@ builtin_eval(lenv *e, lval *args)
   lval *x = lval_take(args, 0);
   x->type = LVAL_SEXP;
   return lval_eval(e, x);
+}
+
+/* Function: if cond body else-body
+ */
+lval *
+builtin_if(lenv *e, lval *args)
+{
+  LARGNUM(args, 3, "if");
+
+  LASSERT(args, args->cell[0]->type == LVAL_BOOL,
+	  "ERROR: Argument to `if` function was not a BOOL");
+  lval *cond = lval_pop(args, 0);
+  lval *body = lval_pop(args, 0);
+  lval *elsebody = lval_pop(args, 0);
+  lval *result;
+  if (cond->boolean) {
+    result = lval_eval(e, body);
+  }
+  else {
+    result = lval_eval(e, elsebody);
+  }
+  lval_del(args);
+  return result;
 }
 
 // PRINTING
