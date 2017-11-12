@@ -77,8 +77,9 @@ struct lenv {
   lenv *par;
 };
 
-
 // Function prototypes
+lval *builtin_greaterthan(lenv *e, lval *args);
+lval *builtin_lessthan(lenv *e, lval *args);
 lval *lval_lambda(lval *formals, lval *body);
 lval *lval_fn(lbuiltin fn);
 lval *lval_copy(lval *v);
@@ -448,21 +449,24 @@ ltype_name(int t)
 
 // BUILTIN FUNCTIONS
 
+/*
+  Function: \ (formals body)
+  Creates an anonymous function
+ */
 lval *
 builtin_lambda(lenv *e, lval *args)
 {
   // Make sure `formals` contains only symbols
   lval *formals = lval_pop(args, 0);
- for (int i = 0; i < formals->count; i++) {
+  for (int i = 0; i < formals->count; i++) {
     TYPEASSERT(args, formals->cell[i]->type, LVAL_SYM, "lambda");
   }
-
   lval *body = lval_pop(args, 0);
   lval_del(args);
-
   return lval_lambda(formals, body);
 }
 
+/* Adds a builtin to the environment */
 void
 lenv_add_builtin(lenv *e, char *name, lbuiltin fn)
 {
@@ -489,32 +493,34 @@ lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "-", builtin_sub);
   lenv_add_builtin(e, "*", builtin_multiply);
   lenv_add_builtin(e, "/", builtin_divide);
+  lenv_add_builtin(e, ">", builtin_greaterthan);
 }
+
+/* Operations on numbers */
+lval *builtin_add(lenv *e, lval *args) {return builtin_op(e, "+", args);}
+lval *builtin_sub(lenv *e, lval *args) {return builtin_op(e, "-", args);}
+lval *builtin_multiply(lenv *e, lval *args) {return builtin_op(e, "*", args);}
+lval *builtin_divide(lenv *e, lval *args) {return builtin_op(e, "/", args);}
 
 lval *
-builtin_add(lenv *e, lval *args)
+builtin_greaterthan(lenv *e, lval *args)
 {
-  return builtin_op(e, "+", args);
+  for (int i = 0; i < args->count; i++) {
+    LASSERT(args, args->cell[i]->type == LVAL_NUM,
+	    "ERROR: Cannot operate on non-number!");
+  }
+  LARGNUM(args, 2, ">"); /* Make sure we have 2 args */
+  lval *l = lval_pop(args, 0);
+  lval *r = lval_pop(args, 0);
+  lval *result = lval_bool(l->num > r->num);
+  lval_del(args);
+  return result;
 }
 
-lval *
-builtin_sub(lenv *e, lval *args)
-{
-  return builtin_op(e, "-", args);
-}
+lval *builtin_lessthan(lenv *e, lval *args) {return builtin_op(e, "<", args);}
+lval *builtin_equal(lenv *e, lval *args) {return builtin_op(e, "=", args);}
 
-lval *
-builtin_multiply(lenv *e, lval *args)
-{
-  return builtin_op(e, "*", args);
-}
-
-lval *
-builtin_divide(lenv *e, lval *args)
-{
-  return builtin_op(e, "/", args);
-}
-
+/* Operations on lists */
 lval *
 builtin_list(lenv *e, lval *args) // Takes one or more args, returns a qexp containing them
 {
@@ -571,17 +577,6 @@ builtin_join(lenv *e, lval *args) // Join together one or more qexps
 }
 
 lval *
-builtin_eval(lenv *e, lval *args)
-{
-  LARGNUM(args, 1, "eval");
-  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
-	  "ERROR: Cannot eval a non-QEXP!");
-  lval *x = lval_take(args, 0);
-  x->type = LVAL_SEXP;
-  return lval_eval(e, x);
-}
-
-lval *
 builtin_cons(lenv *e, lval *args)
 {
   LARGNUM(args, 2, "cons");
@@ -604,6 +599,18 @@ builtin_len(lenv *e, lval *args)
   return lval_num(args->cell[0]->count);
 }
 
+/* The all-important EVAL */
+lval *
+builtin_eval(lenv *e, lval *args)
+{
+  LARGNUM(args, 1, "eval");
+  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
+	  "ERROR: Cannot eval a non-QEXP!");
+  lval *x = lval_take(args, 0);
+  x->type = LVAL_SEXP;
+  return lval_eval(e, x);
+}
+
 // PRINTING
 void
 print_lval(lval *v)
@@ -622,6 +629,11 @@ print_lval(lval *v)
   case LVAL_SYM: printf(v->sym); break;
   case LVAL_SEXP: print_lval_sexp(v, '(', ')'); break;
   case LVAL_QEXP: print_lval_sexp(v, '{', '}'); break;
+  case LVAL_BOOL:
+    if (v->boolean)
+      printf("true");
+    else printf("false");
+    break;
   }
 }
 
@@ -635,9 +647,6 @@ print_lval_sexp(lval *v, char open, char close)
   }
   putchar(close);
 }
-
-void
-println_lval(lval *v) { print_lval(v); putchar('\n'); }
 
 // EVALUATION
 lval *
@@ -670,7 +679,7 @@ lval_eval_sexp(lenv *e, lval *v)
   }
 
   if (v->count == 0)
-      return v; // return `()` as-is
+    return v; // return `()` as-is
 
   lval *first = lval_pop(v, 0); // pops off the first element
 
@@ -737,11 +746,11 @@ builtin_var(lenv *e, lval *a, char *func)
 	  "ERROR: Number of names does not match number of values!");
   LASSERT(names, names->type == LVAL_QEXP,
 	  "ERROR: Function `%s` not passed a QEXP as argument 1!", func)
-  // a is a qexp containing a list of names + a number of values
-  for (int i = 0; i < a->count; i++) {
-    LASSERT(a, names->cell[i]->type == LVAL_SYM,
-	    "ERROR: Function `%s` requires a list of symbols!", func);
-  }
+    // a is a qexp containing a list of names + a number of values
+    for (int i = 0; i < a->count; i++) {
+      LASSERT(a, names->cell[i]->type == LVAL_SYM,
+	      "ERROR: Function `%s` requires a list of symbols!", func);
+    }
 
   for (int i = 0; i < a->count; i++) {
     if (strcmp(func, "def") == 0) {
@@ -794,15 +803,15 @@ read(mpc_ast_t *t) // convert the AST into a sexp
   else if (strstr(t->tag, "qexp")) {
     v = lval_qexp();
   }
-    // fill the empty sexp with any expressions within
-    for (int i = 0; i < t->children_num; i++) {
-      if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
-      if (strcmp(t->children[i]->contents, "(") == 0) { continue; }
-      if (strcmp(t->children[i]->contents, ")") == 0) { continue; }
-      if (strcmp(t->children[i]->contents, "{") == 0) { continue; }
-      if (strcmp(t->children[i]->contents, "}") == 0) { continue; }
-      lval_add(v, read(t->children[i]));
-    }
+  // fill the empty sexp with any expressions within
+  for (int i = 0; i < t->children_num; i++) {
+    if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
+    if (strcmp(t->children[i]->contents, "(") == 0) { continue; }
+    if (strcmp(t->children[i]->contents, ")") == 0) { continue; }
+    if (strcmp(t->children[i]->contents, "{") == 0) { continue; }
+    if (strcmp(t->children[i]->contents, "}") == 0) { continue; }
+    lval_add(v, read(t->children[i]));
+  }
   return v;
 }
 
@@ -823,6 +832,7 @@ read_num(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
   else return lval_err("ERROR: Invalid number!");
 }
 
+/* Main loop, provides a REPL */
 int
 main (int argc, char **argv)
 {
@@ -852,8 +862,10 @@ main (int argc, char **argv)
     fgets(line, MAXLINE, stdin);
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
-      println_lval(read(r.output));
-      println_lval(lval_eval(e, read(r.output)));
+      print_lval(read(r.output));
+      putchar('\n');
+      print_lval(lval_eval(e, read(r.output)));
+      putchar('\n');
       mpc_ast_delete(r.output);
     } else { // catch syntax errors here
       mpc_err_print(r.error);
