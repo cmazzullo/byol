@@ -116,6 +116,8 @@ lval *builtin_op(lenv *e, char *op, lval *args);
 lval *lval_take(lval *v, int i);
 lval *lval_eval(lenv *e, lval *v);
 lval * read_num(mpc_ast_t *t);
+lval *read_bool(mpc_ast_t *t);
+
 void lval_del(lval *v);
 
 // CONSTRUCTORS
@@ -791,7 +793,7 @@ read(mpc_ast_t *t) // convert the AST into a sexp
   if (strcmp(t->tag, ">") == 0) {
     return read(t->children[1]);
   }
-
+  if (strstr(t->tag, "bool")) { return read_bool(t); }
   if (strstr(t->tag, "num")) { return read_num(t); }
   if (strstr(t->tag, "sym")) { return lval_sym(t->contents); }
 
@@ -832,11 +834,22 @@ read_num(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
   else return lval_err("ERROR: Invalid number!");
 }
 
+lval *
+read_bool(mpc_ast_t *t)
+{
+  if (strcmp(t->contents, "true") == 0) {
+    return lval_bool(true);
+  } else {
+    return lval_bool(false);
+  }
+}
+
 /* Main loop, provides a REPL */
 int
 main (int argc, char **argv)
 {
   char *line = malloc(MAXLINE * sizeof (char));
+  mpc_parser_t *Bool = mpc_new("bool");
   mpc_parser_t *Num = mpc_new("num");
   mpc_parser_t *Symbol = mpc_new("symbol");
   mpc_parser_t *Exp = mpc_new("exp");
@@ -845,15 +858,15 @@ main (int argc, char **argv)
   mpc_parser_t *Input = mpc_new("input");
 
   mpca_lang(MPCA_LANG_DEFAULT,"\
-  num: /-?[0-9]+/ ;							\
-  symbol: /[a-zA-Z0-9*+\\-\\/\\\\_=<>!&]+/ ;				\
-  sexp: '(' <exp>* ')' ;						\
-  qexp: '{' <exp>* '}' ;						\
-  exp: <num> | <symbol> | <sexp> | <qexp> ; \
-  input: /^/ <exp>? /$/ ;", Num, Symbol, Sexp, Qexp, Exp, Input);
+  bool : \"true\" | \"false\" ;						\
+  num : /-?[0-9]+/ ;							\
+  symbol : /[a-zA-Z0-9*+\\-\\/\\\\_=<>!&]+/ ;				\
+  sexp : '(' <exp>* ')' ;						\
+  qexp : '{' <exp>* '}' ;						\
+  exp : <bool> | <num> | <symbol> | <sexp> | <qexp> ; \
+  input : /^/ <exp>? /$/ ;", Bool, Num, Symbol, Sexp, Qexp, Exp, Input);
 
   mpc_result_t r;
-
   lenv* e = lenv_new(); // create the environment
   lenv_add_builtins(e);
 
@@ -875,7 +888,7 @@ main (int argc, char **argv)
 
   lenv_del(e);
 
-  mpc_cleanup(6, Symbol, Num, Exp, Sexp, Qexp, Input);
+  mpc_cleanup(7, Bool, Num, Symbol, Sexp, Qexp, Exp, Input);
   putchar('\n');
   free(line);
   return 0;
