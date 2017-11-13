@@ -416,16 +416,29 @@ print_lval_sexp(lval *v, char open, char close)
 lval *
 lval_eval(lenv *e, lval *v) // evaluates an lval recursively
 {
-  if (v->type == LVAL_SYM) { // look up symbols in the environment
-    lval* x = lenv_get(e, v->sym);
-    lval_del(v);
-    return x;
+  lval *result;
+  /* Numbers, functions, errors and bools evaluate to themselves */
+  switch (v->type) {
+  case LVAL_NUM:
+  case LVAL_BOOL:
+  case LVAL_ERR:
+  case LVAL_FN:
+    result = lval_copy(v);
+    break;
+  case LVAL_QEXP:
+    result = lval_copy(v);
+    result->type = LVAL_SEXP;
+    break;
+  case LVAL_SYM:
+    result = lenv_get(e, v->sym);
+    break;
+  case LVAL_SEXP:
+    result = lval_copy(lval_eval_sexp(e, v));
+    break;
   }
 
-  if (v->type == LVAL_SEXP)
-    return lval_eval_sexp(e, v);
-
-  return v;
+  lval_del(v);
+  return result;
 }
 
 lval *
@@ -449,7 +462,6 @@ lval_eval_sexp(lenv *e, lval *v)
 
   if (first->type != LVAL_FN) {
     lval_del(first);
-    lval_del(v);
     return lval_err("ERROR: Invalid function");
   }
 
@@ -656,7 +668,10 @@ lval *builtin_equal(lenv *e, lval *args) {
   ARGNUM(args, 2, "=");
   lval *x = lval_pop(args, 0);
   lval *y = lval_pop(args, 0);
-  TYPEASSERT(args, x->type, y->type, "=");
+  if (x->type != y->type) {
+    lval_del(args);
+    return lval_bool(false);
+  }
   bool result;
   switch (x->type) {
   case LVAL_BOOL:
@@ -793,10 +808,10 @@ lval *
 builtin_eval(lenv *e, lval *args)
 {
   ARGNUM(args, 1, "eval");
-  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
-	  "ERROR: Cannot eval a non-QEXP!");
+  /* LASSERT(args, args->cell[0]->type == LVAL_QEXP, */
+  /* 	  "ERROR: Cannot eval a non-QEXP!"); */
+
   lval *x = lval_take(args, 0);
-  x->type = LVAL_SEXP;
   return lval_eval(e, x);
 }
 
@@ -838,7 +853,7 @@ builtin_if(lenv *e, lval *args)
   lval *elsebody = lval_pop(args, 0);
   lval *result;
   if (cond->boolean) {
-    result = lval_eval(e, body);
+  result = lval_eval(e, body);
   }
   else {
     result = lval_eval(e, elsebody);
@@ -978,8 +993,8 @@ main (int argc, char **argv)
     fgets(line, MAXLINE, stdin);
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
-      print_lval(read(r.output));
-      putchar('\n');
+      // print_lval(read(r.output));
+      // putchar('\n');
       print_lval(lval_eval(e, read(r.output)));
       putchar('\n');
       mpc_ast_delete(r.output);
