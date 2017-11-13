@@ -6,8 +6,8 @@
 #include <stdlib.h>
 #include <stdbool.h> // for boolean values
 
-
 #define MAXLINE 1024
+
 
 // TYPES ////////////////////////////////////////////////////////////////////////////////
 
@@ -47,6 +47,7 @@ struct lval { // lisp value
   lval **cell;
 };
 
+
 // MACROS ////////////////////////////////////////////////////////////////////////////////
 
 #define LASSERT(args, cond, fmt, ...)		\
@@ -56,7 +57,7 @@ struct lval { // lisp value
     return err;					\
   }
 
-#define LARGNUM(args, correctnum, funcname)				\
+#define ARGNUM(args, correctnum, funcname)				\
   if (args->count != correctnum) {					\
     lval *err = lval_err("ERROR: Function `%s` requires %d argument(s) (passed %d)!", \
 			 funcname, correctnum, args->count);		\
@@ -76,6 +77,7 @@ struct lval { // lisp value
 
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP,
        LVAL_QEXP, LVAL_FN, LVAL_BOOL };
+
 
 // FORWARD DECLARATIONS ////////////////////////////////////////////////////////////////////////////////
 
@@ -99,6 +101,7 @@ lval *builtin_sub(lenv *e, lval *args);
 lval *builtin_multiply(lenv *e, lval *args);
 lval *builtin_divide(lenv *e, lval *args);
 lval *builtin_eval(lenv *e, lval *args);
+lval *builtin_equal(lenv *e, lval *args);
 lval *builtin_cons(lenv *e, lval *args);
 lval *builtin_len(lenv *e, lval *args);
 lval *builtin_op(lenv *e, char *op, lval *args);
@@ -129,6 +132,7 @@ void lenv_add_builtins(lenv *e);
 
 
 // LVALS ////////////////////////////////////////////////////////////////////////////////
+
 char * /* Given an lval type, return its name */
 ltype_name(int t)
 {
@@ -485,6 +489,7 @@ lval_add(lval *v, lval *x)
 }
 
 // LENV ////////////////////////////////////////////////////////////////////////////////
+
 lenv *
 lenv_new(void)
 {
@@ -577,6 +582,7 @@ lenv_def(lenv *env, lval *k, lval *v)
 
 
 // BUILTINS ////////////////////////////////////////////////////////////////////////////////
+
 lval *
 builtin_lambda(lenv *e, lval *args)
 {
@@ -613,12 +619,14 @@ lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "cons", builtin_cons);
   lenv_add_builtin(e, "\\", builtin_lambda);
   lenv_add_builtin(e, "if", builtin_if);
+  lenv_add_builtin(e, "=", builtin_equal);
 
   lenv_add_builtin(e, "+", builtin_add);
   lenv_add_builtin(e, "-", builtin_sub);
   lenv_add_builtin(e, "*", builtin_multiply);
   lenv_add_builtin(e, "/", builtin_divide);
   lenv_add_builtin(e, ">", builtin_greaterthan);
+
 }
 
 /* Operations on numbers */
@@ -634,7 +642,7 @@ builtin_greaterthan(lenv *e, lval *args)
     LASSERT(args, args->cell[i]->type == LVAL_NUM,
 	    "ERROR: Cannot operate on non-number!");
   }
-  LARGNUM(args, 2, ">"); /* Make sure we have 2 args */
+  ARGNUM(args, 2, ">"); /* Make sure we have 2 args */
   lval *l = lval_pop(args, 0);
   lval *r = lval_pop(args, 0);
   lval *result = lval_bool(l->num > r->num);
@@ -643,7 +651,62 @@ builtin_greaterthan(lenv *e, lval *args)
 }
 
 lval *builtin_lessthan(lenv *e, lval *args) {return builtin_op(e, "<", args);}
-lval *builtin_equal(lenv *e, lval *args) {return builtin_op(e, "=", args);}
+
+lval *builtin_equal(lenv *e, lval *args) {
+  ARGNUM(args, 2, "=");
+  lval *x = lval_pop(args, 0);
+  lval *y = lval_pop(args, 0);
+  TYPEASSERT(args, x->type, y->type, "=");
+  bool result;
+  switch (x->type) {
+  case LVAL_BOOL:
+    result = x->boolean == y->boolean;
+    break;
+  case LVAL_NUM:
+    result = x->num == y->num;
+    break;
+  case LVAL_ERR:
+    result = strcmp(x->err, y->err) == 0;
+    break;
+  case LVAL_SYM:
+    result = strcmp(x->sym, y->sym) == 0;
+    break;
+  case LVAL_SEXP:
+  case LVAL_QEXP:
+    if (x->count != y->count) {
+      result = false; break;
+    }
+    result = true;
+    for (int i = 0; i < x->count; i++) {
+      lval *new_args = lval_qexp();
+      lval_add(new_args, x->cell[i]);
+      lval_add(new_args, y->cell[i]);
+      if (!builtin_equal(e, new_args)->boolean) /* if the cells aren't equal */
+	result = false; /* return false */
+      lval_del(new_args);
+    }
+    break;
+  case LVAL_FN:
+    if (x->builtin && y->builtin) {
+      result = x->builtin == y->builtin;
+    } else if (!x->builtin && !y->builtin) {
+      lval *formals = lval_qexp();
+      lval_add(formals, x->formals);
+      lval_add(formals, y->formals);
+      lval *bodys = lval_qexp();
+      lval_add(bodys, x->body);
+      lval_add(bodys, y->body);
+      result = builtin_equal(e, formals)->boolean &&
+	builtin_equal(e, bodys)->boolean;
+    } else {
+      result = false;
+    }
+  }
+  lval_del(args);
+  return lval_bool(result);
+
+  return NULL;
+}
 
 /* Operations on lists */
 lval *
@@ -656,7 +719,7 @@ builtin_list(lenv *e, lval *args) // Takes one or more args, returns a qexp cont
 lval *
 builtin_head(lenv *e, lval *args) // Returns the first element of a qexp
 {
-  LARGNUM(args, 1, "head");
+  ARGNUM(args, 1, "head");
   LASSERT(args, args->cell[0]->type == LVAL_QEXP,
 	  "ERROR: Cannot take head of a non-QEXP! (recieved `%s`)",
 	  ltype_name(args->cell[0]->type));
@@ -671,7 +734,7 @@ builtin_head(lenv *e, lval *args) // Returns the first element of a qexp
 lval *
 builtin_tail(lenv *e, lval *args) // Returns the cdr of a qexp
 {
-  LARGNUM(args, 1,"tail");
+  ARGNUM(args, 1,"tail");
   LASSERT(args, args->cell[0]->type == LVAL_QEXP,
 	  "ERROR: Cannot take tail of a non-QEXP!");
   LASSERT(args, args->cell[0]->count != 0,
@@ -685,7 +748,7 @@ builtin_tail(lenv *e, lval *args) // Returns the cdr of a qexp
 lval *
 builtin_join(lenv *e, lval *args) // Join together one or more qexps
 {
-  // LARGNUM(args, >0, "join");
+  // ARGNUM(args, >0, "join");
   LASSERT(args, args->count != 0,
 	  "ERROR: Function join passed 0 arguments!");
   lval *v = lval_qexp();
@@ -704,7 +767,7 @@ builtin_join(lenv *e, lval *args) // Join together one or more qexps
 lval *
 builtin_cons(lenv *e, lval *args)
 {
-  LARGNUM(args, 2, "cons");
+  ARGNUM(args, 2, "cons");
   LASSERT(args, args->cell[1]->type == LVAL_QEXP,
 	  "ERROR: Cons function requires a QEXP as a second argument");
   lval *q = lval_qexp();
@@ -717,18 +780,19 @@ builtin_cons(lenv *e, lval *args)
 lval *
 builtin_len(lenv *e, lval *args)
 {
-  LARGNUM(args, 1, "len");
+  ARGNUM(args, 1, "len");
   LASSERT(args, args->cell[0]->type == LVAL_QEXP,
 	  "ERROR: Argument to len function was not a QEXP");
 
   return lval_num(args->cell[0]->count);
 }
 
-/* The all-important EVAL */
+/* Function: eval qexp
+The all-important EVAL */
 lval *
 builtin_eval(lenv *e, lval *args)
 {
-  LARGNUM(args, 1, "eval");
+  ARGNUM(args, 1, "eval");
   LASSERT(args, args->cell[0]->type == LVAL_QEXP,
 	  "ERROR: Cannot eval a non-QEXP!");
   lval *x = lval_take(args, 0);
@@ -765,7 +829,7 @@ builtin_op(lenv *e, char *op, lval *args) // apply fn to args
 lval *
 builtin_if(lenv *e, lval *args)
 {
-  LARGNUM(args, 3, "if");
+  ARGNUM(args, 3, "if");
 
   LASSERT(args, args->cell[0]->type == LVAL_BOOL,
 	  "ERROR: Argument to `if` function was not a BOOL");
@@ -827,7 +891,9 @@ builtin_var(lenv *e, lval *a, char *func)
   return lval_sexp();
 }
 
+
 // READ ////////////////////////////////////////////////////////////////////////////////
+
 lval *
 read(mpc_ast_t *t) // convert the AST into a sexp
 {
@@ -880,8 +946,6 @@ read_bool(mpc_ast_t *t)
 
 
 // MAIN ////////////////////////////////////////////////////////////////////////////////
-
-
 
 /* Main loop, provides a REPL */
 int
