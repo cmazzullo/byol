@@ -133,6 +133,7 @@ void lenv_add_builtins(lenv *e);
 
 // LVALS ////////////////////////////////////////////////////////////////////////////////
 
+
 char * /* Given an lval type, return its name */
 ltype_name(int t)
 {
@@ -143,6 +144,7 @@ ltype_name(int t)
   case LVAL_SEXP: return "sexp";
   case LVAL_QEXP: return "qexp";
   case LVAL_FN: return "fn";
+  case LVAL_BOOL: return "bool";
   default: return "unknown";
   }
 }
@@ -272,13 +274,14 @@ lval_del(lval *v) // free memory for an lval
 lval *
 lval_copy(lval *v)
 {
-  lval *x = malloc(sizeof(lval));
-  x->type = v->type;
+  lval *x;
 
   switch (v->type) {
-  case LVAL_NUM: x->num = v->num; break;
+  case LVAL_NUM:
+    x = lval_num(v->num);
+    break;
   case LVAL_FN:
-    x->builtin = v->builtin;
+    x = lval_fn(v->builtin);
     if (!v->builtin) {
       x->formals = lval_copy(v->formals);
       x->body = lval_copy(v->body);
@@ -286,15 +289,21 @@ lval_copy(lval *v)
     }
     break;
   case LVAL_ERR:
-    x->err = malloc((strlen(v->err) + 1) * sizeof(char));
-    strcpy(x->err, v->err);
+    x = lval_err(v->err);
     break;
   case LVAL_SYM:
-    x->sym = malloc((strlen(v->sym) + 1) * sizeof(char));
-    strcpy(x->sym, v->sym);
+    x = lval_sym(v->sym);
     break;
   case LVAL_SEXP:
+    x = lval_sexp();
+    x->count = v->count;
+    x->cell = malloc(x->count * sizeof(lval *));
+    for (int i = 0; i < x->count; i++) {
+      x->cell[i] = lval_copy(v->cell[i]);
+    }
+    break;
   case LVAL_QEXP:
+    x = lval_qexp();
     x->count = v->count;
     x->cell = malloc(x->count * sizeof(lval *));
     for (int i = 0; i < x->count; i++) {
@@ -302,6 +311,7 @@ lval_copy(lval *v)
     }
     break;
   }
+
   return x;
 }
 
@@ -309,8 +319,10 @@ lval* // calls a user-defined function
 lval_call(lenv *e, lval *f, lval *a)
 {
 
-  if (f->builtin)
-    return f->builtin(e, a);
+  if (f->builtin) {
+    lval *result = f->builtin(e, a);
+    return result;
+  }
 
   // record argument counts
   int given = a->count;
@@ -417,6 +429,7 @@ lval *
 lval_eval(lenv *e, lval *v) // evaluates an lval recursively
 {
   lval *result;
+
   /* Numbers, functions, errors and bools evaluate to themselves */
   switch (v->type) {
   case LVAL_NUM:
@@ -425,19 +438,20 @@ lval_eval(lenv *e, lval *v) // evaluates an lval recursively
   case LVAL_FN:
     result = lval_copy(v);
     break;
+  case LVAL_SYM:
+    result = lenv_get(e, v->sym);
+    break;
   case LVAL_QEXP:
     result = lval_copy(v);
     result->type = LVAL_SEXP;
     break;
-  case LVAL_SYM:
-    result = lenv_get(e, v->sym);
-    break;
   case LVAL_SEXP:
-    result = lval_copy(lval_eval_sexp(e, v));
+    result = lval_eval_sexp(e, v);
     break;
   }
 
-  lval_del(v);
+  /* lval_del(v); */
+
   return result;
 }
 
@@ -455,8 +469,9 @@ lval_eval_sexp(lenv *e, lval *v)
       return v->cell[i];
   }
 
-  if (v->count == 0)
-    return v; // return `()` as-is
+  if (v->count == 0) {
+    return lval_copy(v); // return `()` as-is
+  }
 
   lval *first = lval_pop(v, 0); // pops off the first element
 
@@ -727,7 +742,7 @@ lval *builtin_equal(lenv *e, lval *args) {
 lval *
 builtin_list(lenv *e, lval *args) // Takes one or more args, returns a qexp containing them
 {
-  args->type = LVAL_QEXP;
+  args->type = LVAL_SEXP;
   return args;
 }
 
@@ -747,17 +762,20 @@ builtin_head(lenv *e, lval *args) // Returns the first element of a sexp
 }
 
 lval *
-builtin_tail(lenv *e, lval *args) // Returns the cdr of a qexp
+builtin_tail(lenv *e, lval *args) // Returns the cdr of a sexp
 {
-  ARGNUM(args, 1,"tail");
-  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
-	  "ERROR: Cannot take tail of a non-QEXP!");
-  LASSERT(args, args->cell[0]->count != 0,
-	  "ERROR: Cannot take tail of an empty QEXP!");
+
+  ARGNUM(args, 1, "tail");
+  LASSERT(args, args->cell[0]->type == LVAL_SEXP,
+	  "ERROR: Cannot take tail of a non-SEXP!");
+  LASSERT(args, args->cell[0]->count > 0,
+	  "ERROR: Cannot take tail of an empty SEXP!");
 
   lval *v = lval_take(args, 0);
   lval_del(lval_pop(v, 0)); // pop & delete the first lval leaving the cdr
-  return v;
+  lval *result = lval_copy(v);
+  lval_del(v);
+  return result;
 }
 
 lval *
@@ -769,7 +787,7 @@ builtin_join(lenv *e, lval *args) // Join together one or more qexps
   lval *v = lval_qexp();
   while (args->count > 0) {
     lval *a = lval_pop(args, 0);
-    LASSERT(a, a->type == LVAL_QEXP,
+    LASSERT(a, a->type == LVAL_SEXP,
 	    "ERROR: Cannot take tail of a non-QEXP!");
     while (a->count > 0) lval_add(v, lval_pop(a, 0));
     lval_del(a);
@@ -783,7 +801,7 @@ lval *
 builtin_cons(lenv *e, lval *args)
 {
   ARGNUM(args, 2, "cons");
-  LASSERT(args, args->cell[1]->type == LVAL_QEXP,
+  LASSERT(args, args->cell[1]->type == LVAL_SEXP,
 	  "ERROR: Cons function requires a QEXP as a second argument");
   lval *q = lval_qexp();
   lval_add(q, args->cell[0]);
@@ -796,7 +814,7 @@ lval *
 builtin_len(lenv *e, lval *args)
 {
   ARGNUM(args, 1, "len");
-  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
+  LASSERT(args, args->cell[0]->type == LVAL_SEXP,
 	  "ERROR: Argument to len function was not a QEXP");
 
   return lval_num(args->cell[0]->count);
@@ -886,7 +904,7 @@ builtin_var(lenv *e, lval *a, char *func)
   lval *names = lval_pop(a, 0);
   LASSERT(a, a->count == names->count,
 	  "ERROR: Number of names does not match number of values!");
-  LASSERT(names, names->type == LVAL_QEXP,
+  LASSERT(names, names->type == LVAL_SEXP,
 	  "ERROR: Function `%s` not passed a QEXP as argument 1!", func)
     // a is a qexp containing a list of names + a number of values
     for (int i = 0; i < a->count; i++) {
