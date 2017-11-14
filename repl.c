@@ -732,18 +732,18 @@ builtin_list(lenv *e, lval *args) // Takes one or more args, returns a qexp cont
 }
 
 lval *
-builtin_head(lenv *e, lval *args) // Returns the first element of a qexp
+builtin_head(lenv *e, lval *args) // Returns the first element of a sexp
 {
   ARGNUM(args, 1, "head");
-  LASSERT(args, args->cell[0]->type == LVAL_QEXP,
-	  "ERROR: Cannot take head of a non-QEXP! (recieved `%s`)",
+  LASSERT(args, args->cell[0]->type == LVAL_SEXP,
+	  "ERROR: Cannot take head of a non-SEXP! (recieved `%s`)",
 	  ltype_name(args->cell[0]->type));
   LASSERT(args, args->cell[0]->count != 0,
-	  "ERROR: Cannot take head of an empty QEXP!");
+	  "ERROR: Cannot take head of an empty SEXP!");
 
   lval *v = lval_take(args, 0);
   while (v->count > 1) lval_del(lval_pop(v, 1)); // pop & delete the second lval leaving only the head
-  return v;
+  return lval_take(v, 0);
 }
 
 lval *
@@ -960,13 +960,14 @@ read_bool(mpc_ast_t *t)
 }
 
 
+
 // MAIN ////////////////////////////////////////////////////////////////////////////////
 
 /* Main loop, provides a REPL */
 int
 main (int argc, char **argv)
 {
-  char *line = malloc(MAXLINE * sizeof (char));
+
   mpc_parser_t *Bool = mpc_new("bool");
   mpc_parser_t *Num = mpc_new("num");
   mpc_parser_t *Symbol = mpc_new("symbol");
@@ -988,13 +989,13 @@ main (int argc, char **argv)
   lenv* e = lenv_new(); // create the environment
   lenv_add_builtins(e);
 
-  while (1) {
+  char *line = malloc(MAXLINE * sizeof (char));
+
+  while (true) {
     printf("> ");
     fgets(line, MAXLINE, stdin);
 
     if (mpc_parse("<stdin>", line, Input, &r)) {
-      // print_lval(read(r.output));
-      // putchar('\n');
       print_lval(lval_eval(e, read(r.output)));
       putchar('\n');
       mpc_ast_delete(r.output);
