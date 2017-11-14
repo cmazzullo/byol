@@ -1,7 +1,4 @@
-(def {fun}
-     (\ {args body}
-      {def (head args)
-	   (\ (tail args) body)}))
+(def {fun} (\ {args body} {def (head args) (\ (tail args) body)}))
 
 (fun {unpack f l}
      {eval (cons f l)})
