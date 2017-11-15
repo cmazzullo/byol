@@ -76,7 +76,7 @@ struct lval { // lisp value
   }
 
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP,
-       LVAL_QEXP, LVAL_FN, LVAL_BOOL };
+       LVAL_MACRO, LVAL_FN, LVAL_BOOL };
 
 
 // FORWARD DECLARATIONS ////////////////////////////////////////////////////////////////////////////////
@@ -105,7 +105,6 @@ lval *builtin_equal(lenv *e, lval *args);
 lval *builtin_cons(lenv *e, lval *args);
 lval *builtin_len(lenv *e, lval *args);
 lval *builtin_op(lenv *e, char *op, lval *args);
-lval *builtin_def(lenv *e, lval *a);
 
 lval *lval_sym(char *sym);
 lval *lval_err(char *fmt, ...);
@@ -142,7 +141,7 @@ ltype_name(int t)
   case LVAL_ERR: return "err";
   case LVAL_SYM: return "sym";
   case LVAL_SEXP: return "sexp";
-  case LVAL_QEXP: return "qexp";
+  case LVAL_MACRO: return "macro";
   case LVAL_FN: return "fn";
   case LVAL_BOOL: return "bool";
   default: return "unknown";
@@ -222,12 +221,10 @@ lval_sexp(void) // create new empty sexp
 }
 
 lval *
-lval_qexp(void) // create new empty qexp
+lval_macro(void) // create new empty macro
 {
   lval *v = malloc(sizeof(lval));
-  v->type = LVAL_QEXP;
-  v->count = 0;
-  v->cell = NULL;
+  v->type = LVAL_MACRO;
   return v;
 }
 
@@ -641,7 +638,6 @@ lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "eval", builtin_eval);
   lenv_add_builtin(e, "join", builtin_join);
   lenv_add_builtin(e, "def", builtin_def);
-  lenv_add_builtin(e, "=", builtin_put);
   lenv_add_builtin(e, "len", builtin_len);
   lenv_add_builtin(e, "cons", builtin_cons);
   lenv_add_builtin(e, "\\", builtin_lambda);
