@@ -271,6 +271,9 @@ lval_copy(lval *v)
 {
   lval *x;
   switch (v->type) {
+  case LVAL_BOOL:
+    x = lval_bool(v->boolean);
+    break;
   case LVAL_NUM:
     x = lval_num(v->num);
     break;
@@ -464,7 +467,6 @@ lval_eval_sexp(lenv *e, lval *v)
   }
 
   lval *first = lval_eval(e, lval_pop(v, 0)); // pops off the first element
-  printf("first->type = %s\n", ltype_name(first->type));
   if (first->type == LVAL_MACRO) { // Short-circuit evaluation
     return lval_call(e, first, v);
   } else if (first->type == LVAL_ERR) {
@@ -639,7 +641,7 @@ lenv_add_builtins(lenv *e)
 {
   lenv_add_builtin_macro(e, "\\", builtin_lambda);
   lenv_add_builtin_macro(e, "macro", builtin_macro);
-  lenv_add_builtin(e, "if", builtin_if);
+  lenv_add_builtin_macro(e, "if", builtin_if);
   lenv_add_builtin_macro(e, "def", builtin_def);
 
   lenv_add_builtin(e, "list", builtin_list);
@@ -889,9 +891,11 @@ builtin_if(lenv *e, lval *args)
 {
   ARGNUM(args, 3, "if");
 
-  LASSERT(args, args->cell[0]->type == LVAL_BOOL,
-	  "ERROR: Argument to `if` function was not a BOOL");
-  lval *cond = lval_pop(args, 0);
+  lval *cond = lval_eval(e, lval_pop(args, 0));
+  if (cond->type != LVAL_BOOL) {
+    return lval_err("ERROR: First argument to `if` must be a BOOL, recieved `%s`.",
+		    ltype_name(cond->type));
+  }
   lval *body = lval_pop(args, 0);
   lval *elsebody = lval_pop(args, 0);
   lval *result;
