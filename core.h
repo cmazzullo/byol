@@ -55,3 +55,30 @@ void lenv_add_builtins(lenv *e);
 
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP,
        LVAL_MACRO, LVAL_FN, LVAL_BOOL };
+
+// MACROS ////////////////////////////////////////////////////////////////////////////////
+
+#define LASSERT(args, cond, fmt, ...)		\
+  if (!(cond)) {				\
+    lval *err = lval_err(fmt, ##__VA_ARGS__);	\
+    lval_del(args);				\
+    return err;					\
+  }
+
+#define ARGNUM(args, correctnum, funcname)				\
+  if (args->count != correctnum) {					\
+    lval *err = lval_err("ERROR: Function `%s` requires %d argument(s) (passed %d)!", \
+			 funcname, correctnum, args->count);		\
+    lval_del(args);							\
+    return err;								\
+  }
+
+#define TYPEASSERT(args, recievedtype, righttype, funcname)		\
+  if (recievedtype != righttype) {					\
+    lval *err = lval_err("ERROR: Function `%s` requires argument(s) of type %s (passed %s)!", \
+			 funcname,					\
+			 ltype_name(righttype),				\
+			 ltype_name(recievedtype));			\
+    lval_del(args);							\
+    return err;								\
+  }

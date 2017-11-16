@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <stdbool.h> // for boolean values
 
-#define MAXLINE 1024
+#define MAXERR 1024 // Maximum error string length
 
 // TYPES ////////////////////////////////////////////////////////////////////////////////
 
@@ -38,34 +38,6 @@ struct lval { // lisp value
   int count;
   lval **cell;
 };
-
-
-// MACROS ////////////////////////////////////////////////////////////////////////////////
-
-#define LASSERT(args, cond, fmt, ...)		\
-  if (!(cond)) {				\
-    lval *err = lval_err(fmt, ##__VA_ARGS__);	\
-    lval_del(args);				\
-    return err;					\
-  }
-
-#define ARGNUM(args, correctnum, funcname)				\
-  if (args->count != correctnum) {					\
-    lval *err = lval_err("ERROR: Function `%s` requires %d argument(s) (passed %d)!", \
-			 funcname, correctnum, args->count);		\
-    lval_del(args);							\
-    return err;								\
-  }
-
-#define TYPEASSERT(args, recievedtype, righttype, funcname)		\
-  if (recievedtype != righttype) {					\
-    lval *err = lval_err("ERROR: Function `%s` requires argument(s) of type %s (passed %s)!", \
-			 funcname,					\
-			 ltype_name(righttype),				\
-			 ltype_name(recievedtype));			\
-    lval_del(args);							\
-    return err;								\
-  }
 
 
 // LVALS ////////////////////////////////////////////////////////////////////////////////
@@ -113,8 +85,8 @@ lval_err(char *fmt, ...) // create new error
   va_list ap;
   va_start(ap, fmt);
 
-  v->err = malloc(MAXLINE * sizeof(char));
-  vsnprintf(v->err, MAXLINE, fmt, ap);
+  v->err = malloc(MAXERR * sizeof(char));
+  vsnprintf(v->err, MAXERR, fmt, ap);
   va_end(ap);
 
   v->type = LVAL_ERR;
@@ -553,7 +525,6 @@ lenv_def(lenv *env, lval *k, lval *v)
 
 // BUILTINS ////////////////////////////////////////////////////////////////////////////////
 
-
 /* Adds a builtin to the environment */
 void
 lenv_add_builtin(lenv *e, char *name, lbuiltin fn)
@@ -563,8 +534,7 @@ lenv_add_builtin(lenv *e, char *name, lbuiltin fn)
   lval_del(v);
 }
 
-
-/* Adds a builtin to the environment */
+/* Adds a macro to the environment */
 void
 lenv_add_builtin_macro(lenv *e, char *name, lbuiltin fn)
 {
@@ -822,7 +792,7 @@ builtin_op(lenv *e, char *op, lval *args) // apply fn to args
   return first;
 }
 
-/* Function: if cond body else-body */
+/* Macro: if cond body else-body */
 lval *
 builtin_if(lenv *e, lval *args)
 {
