@@ -5,3 +5,5 @@
 
 (fun {pack f & xs}
      {f xs})
+
+(def (quote) (macro (sexp) sexp))
