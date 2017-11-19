@@ -1,21 +1,43 @@
 #include "mpc/mpc.h"
 #include "core.h"
 
-#include <string.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include <stdlib.h>
-#include <stdbool.h> // for boolean values
+#include <string.h>
 
 #define MAXLINE 1024
 
 // MAIN ////////////////////////////////////////////////////////////////////////////////
 
+void
+run_repl(mpc_parser_t *Input, lenv *e)
+{
+  char *line = malloc(MAXLINE * sizeof (char));
+  mpc_result_t r;
+  while (strcmp(line, "quit\n") != 0) {
+    printf("> ");
+    fgets(line, MAXLINE, stdin);
+
+    if (mpc_parse("<stdin>", line, Input, &r)) {
+      mpc_ast_t *ast_input = r.output;
+      lval *lval_input = read(ast_input);
+      lval *result = lval_eval(e, lval_input);
+      print_lval(result);
+      putchar('\n');
+      mpc_ast_delete(r.output);
+    } else { // catch syntax errors here
+      mpc_err_print(r.error);
+      mpc_err_delete(r.error);
+    }
+  }
+  free(line);
+  putchar('\n');
+}
+
 /* Main loop, provides a REPL */
 int
 main (int argc, char **argv)
 {
-
   mpc_parser_t *Bool = mpc_new("bool");
   mpc_parser_t *Num = mpc_new("num");
   mpc_parser_t *Symbol = mpc_new("symbol");
@@ -31,30 +53,12 @@ main (int argc, char **argv)
   exp : <bool> | <num> | <symbol> | <sexp> ; \
   input : /^/ <exp>? /$/ ;", Bool, Num, Symbol, Sexp, Exp, Input);
 
-  mpc_result_t r;
   lenv* e = lenv_new(); // create the environment
   lenv_add_builtins(e);
 
-  char *line = malloc(MAXLINE * sizeof (char));
-
-  while (true) {
-    printf("> ");
-    fgets(line, MAXLINE, stdin);
-
-    if (mpc_parse("<stdin>", line, Input, &r)) {
-      print_lval(lval_eval(e, read(r.output)));
-      putchar('\n');
-      mpc_ast_delete(r.output);
-    } else { // catch syntax errors here
-      mpc_err_print(r.error);
-      mpc_err_delete(r.error);
-    }
-  }
+  run_repl(Input, e);
 
   lenv_del(e);
-
   mpc_cleanup(6, Bool, Num, Symbol, Sexp, Exp, Input);
-  putchar('\n');
-  free(line);
   return 0;
 }

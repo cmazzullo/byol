@@ -280,7 +280,7 @@ lval_call(lenv *e, lval *f, lval *a)
     lval_del(lval_pop(f->formals, 0));
 
     lval *sym = lval_pop(f->formals, 0);
-    lval *val = lval_sexp(); // TODO: Change this
+    lval *val = lval_sexp();
 
     lenv_put(e, sym, val);
     lval_del(sym); lval_del(val);
@@ -381,8 +381,10 @@ lval_eval_sexp(lenv *e, lval *v)
   } else if (first->type == LVAL_ERR) {
     return first; // catch errors in first element
   } else if (first->type != LVAL_FN) {
+    lval *result = lval_err("ERROR: First element of a SEXP must be a function or macro, recieved `%s`",
+			    ltype_name(first->type));
     lval_del(first);
-    return lval_err("ERROR: Invalid function");
+    return result;
   }
 
   // evaluate children
@@ -835,30 +837,22 @@ builtin_put(lenv *e, lval *a)
 lval *
 builtin_var(lenv *e, lval *a, char *func)
 {
-  LASSERT(a, a->count > 0,
-	  "ERROR: Not enough arguments to `%s`!", func);
-  lval *names = lval_pop(a, 0);
-  LASSERT(names, names->type == LVAL_SEXP,
-	  "ERROR: Function `%s` not passed a SEXP as argument 1!", func);
-  LASSERT(a, a->count == names->count,
-	  "ERROR: Number of names does not match number of values!");
-  // a is a sexp containing a list of names + a number of values
-  for (int i = 0; i < a->count; i++) {
-    LASSERT(a, names->cell[i]->type == LVAL_SYM,
-	    "ERROR: Function `%s` requires a list of symbols!", func);
+  ARGNUM(a, 2, func);
+  lval *name = lval_pop(a, 0);
+  LASSERT(name, name->type == LVAL_SYM,
+	  "ERROR: Function `%s` not passed a SYMBOL as argument 1!", func);
+  lval *value = lval_eval(e, lval_take(a, 0));
+
+  if (value->type == LVAL_ERR)
+    return value;
+
+  if (strcmp(func, "def") == 0) {
+    lenv_def(e, name, value);
+  } else if (strcmp(func, "put") == 0) {
+    lenv_put(e, name, value);
   }
 
-  for (int i = 0; i < a->count; i++) {
-    if (strcmp(func, "def") == 0) {
-      lenv_def(e, lval_copy(names->cell[i]),
-	       lval_copy(lval_eval(e, a->cell[i])));
-    } else if (strcmp(func, "put") == 0) {
-      lenv_put(e, lval_copy(names->cell[i]), lval_copy(a->cell[i]));
-    }
-  }
-
-  lval_del(a);
-  return lval_sexp();
+  return value;
 }
 
 

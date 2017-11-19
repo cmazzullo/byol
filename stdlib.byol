@@ -1,5 +1,3 @@
-(def {fun} (\ {args body} {def (head args) (\ (tail args) body)}))
-
 (fun {unpack f l}
      {eval (cons f l)})
 
@@ -7,3 +5,27 @@
      {f xs})
 
 (def (quote) (macro (sexp) sexp))
+
+(def fact (\ (n) (if (= n 0) 1 (* n (fact (- n 1))))))
+
+(fun fact (n)
+  (if (= n 0) 1 (* n (fact (- n 1)))))
+
+(def fun (macro (name formals body) (def name (\ formals body))))
+
+(def fun
+  (macro (name formals body)
+    (def name (\ formals body))))
+
+
+Issue: Closures/environments aren't working
+
+(\ +n (n) (\ (x) (+ n x)))
+ERROR: Function `<builtin lambda>` requires 2 argument(s) (passed 3)!
+> (def +n (\ (n) (\ (x) (+ n x))))
+(\ (n) (\ (x) (+ n x)))
+> (+n 3)
+(\ (x) (+ n x))
+> ((+n 3) 1)
+ERROR: Variable `n` not found
+>
