@@ -16,7 +16,7 @@ struct lenv {
   lval **vals;
   char **names;
 
-  lenv *par;
+  lenv *parent;
 };
 
 struct lval { // lisp value
@@ -287,7 +287,7 @@ lval_call(lenv *e, lval *f, lval *a)
   }
 
   if (f->formals->count == 0) {
-    f->env->par = e;
+    f->env->parent = e;
     return builtin_eval(f->env, lval_add(lval_sexp(), lval_copy(f->body)));
   } else {
     return lval_copy(f);
@@ -296,6 +296,14 @@ lval_call(lenv *e, lval *f, lval *a)
 
 
 // PRINTING
+void
+print_lenv(lenv *e)
+{
+
+
+}
+
+
 void
 print_lval(lval *v)
 {
@@ -441,7 +449,7 @@ lenv_new(void)
   env->count = 0;
   env->names = NULL;
   env->vals = NULL;
-  env->par = NULL;
+  env->parent = NULL;
   return env;
 }
 
@@ -462,7 +470,7 @@ lenv_copy(lenv *env)
 {
   lenv *x = lenv_new();
 
-  x->par = env->par;
+  x->parent = env->parent;
   x->count = env->count;
   x->names = malloc(sizeof(char *) * env->count);
   x->vals = malloc(sizeof(lval *) * env->count);
@@ -483,8 +491,8 @@ lenv_get(lenv *env, char *name)
   }
 
   // search parent environment if variable isn't found
-  if (env->par) {
-    return lenv_get(env->par, name);
+  if (env->parent) {
+    return lenv_get(env->parent, name);
   }
   return lval_err("ERROR: Variable `%s` not found", name);
 }
@@ -517,8 +525,8 @@ lenv_put(lenv *env, lval *name, lval *v)
 void
 lenv_def(lenv *env, lval *k, lval *v)
 {
-  if (env->par) {
-    lenv_def(env->par, k, v);
+  if (env->parent) {
+    lenv_def(env->parent, k, v);
   } else {
     lenv_put(env, k, v);
   }
