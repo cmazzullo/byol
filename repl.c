@@ -10,7 +10,7 @@
 // MAIN ////////////////////////////////////////////////////////////////////////////////
 
 void
-run_repl(mpc_parser_t *Input, lenv *e)
+run_repl(mpc_parser_t *Input, lval *e)
 {
   char *line = malloc(MAXLINE * sizeof (char));
   mpc_result_t r;
@@ -52,12 +52,12 @@ main (int argc, char **argv)
   exp : <bool> | <num> | <symbol> | <sexp> ; \
   input : /^/ <exp>? /$/ ;", Bool, Num, Symbol, Sexp, Exp, Input);
 
-  lenv* e = lenv_new(); // create the environment
-  lenv_add_builtins(e);
+  lval* e = lval_dict(); // create the environment
+  env_add_builtins(e);
 
   run_repl(Input, e);
 
-  lenv_del(e);
+  lval_del(e);
   mpc_cleanup(6, Bool, Num, Symbol, Sexp, Exp, Input);
   return 0;
 }
