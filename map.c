@@ -7,8 +7,10 @@
 #include <string.h>
 
 #include "map.h"
+#include "core.h"
 
 #define ARRAYSIZE 1024
+#define MAXKEY 256 // Max key length
 
 struct list {
   lval *val;
@@ -27,7 +29,8 @@ list *
 new_list(char *key, lval *val)
 {
   list *n = calloc(1, sizeof(list));
-  n->key = key;
+  n->key = malloc(sizeof(char) * MAXKEY);
+  strncpy(n->key, key, MAXKEY);
   n->val = val;
   return n;
 }
@@ -52,18 +55,36 @@ list_get(list *l, char *key)
       return list_get(cdr(l), key);
     }
   } else {
-    return -999; // return filler value
+    return NULL; // return filler value
   }
 }
 
 map *
-new_map(void)
+map_new(void)
 {
   map *m = calloc(1, sizeof(map));
   m->data = calloc(ARRAYSIZE, sizeof(list *));
   m->keys = calloc(ARRAYSIZE, sizeof(char *));
   m->nkeys = 0;
   return m;
+}
+
+map *
+map_copy(map *m)
+{
+  map *x = map_new();
+  for (int i = 0; i < m->nkeys; i++) { // for each key in m
+    map_add(x, m->keys[i], map_get(m, m->keys[i])); // add the val to x
+  }
+  return x;
+}
+
+void
+map_del(map *m)
+{
+  free(m->data);
+  free(m->keys);
+  free(m);
 }
 
 void
@@ -75,11 +96,14 @@ map_add(map *m, char *key, lval *val)
   } else {
     m->data[h] = new_list(key, val);
   }
-  m->keys[m->nkeys] = key;
+
+  m->keys = realloc(m->keys, sizeof(char *) * (m->nkeys + 1));
+  m->keys[m->nkeys] = malloc(sizeof(char) * MAXKEY);
+  strncpy(m->keys[m->nkeys], key, MAXKEY);
   m->nkeys++;
 }
 
-int
+lval *
 map_get(map *m, char *key)
 {
   list *l = m->data[hash(key)];
@@ -105,23 +129,26 @@ map_print(map *m)
 {
   printf("{\n");
   for(int i = 0; i < m->nkeys; i++) {
-    printf("  %s: %d", m->keys[i], map_get(m, m->keys[i]));
+
+    printf("  %s: ", m->keys[i]);
+    print_lval(map_get(m, m->keys[i]));
     putchar('\n');
   }
   printf("}\n");
 }
 
-int
-main(int argc, char **argv)
-{
-  map *m = new_map();
-  map_add(m, "thing", 1);
-  map_add(m, "other_thing", 2);
-  map_print(m);
-  printf("%d, %d, %d\n", map_get(m, "thing"), map_get(m, "other_thing"), map_get(m, "fake"));
-  printf("Hash \"thing\" = %d\n", hash("thing"));
-  printf("Hash \"hting\" = %d\n", hash("hting"));
-  printf("Hash \"other_thing\" = %d\n", hash("other_thing"));
-  printf("Get \"other thing\" = %d\n", map_get(m, "other thing"));
-  return 0;
-}
+/* int */
+/* main(int argc, char **argv) { */
+/*   map *m = map_new(); */
+/*   lval *l1 = lval_num(1); */
+/*   lval *l2 = lval_err("ERROR: I'm an error"); */
+/*   lval *l3 = lval_sym("mysym"); */
+/*   map_add(m, "first", l1); */
+/*   map_add(m, "second", l2); */
+/*   map_add(m, "third", l3); */
+/*   map_print(m); */
+/*   map *m2 = map_copy(m); */
+/*   map_add(m2, "fourth", lval_num(22)); */
+/*   map_print(m2); */
+/*   return 0; */
+/* } */
