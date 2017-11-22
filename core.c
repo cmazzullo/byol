@@ -257,7 +257,7 @@ lval_call(lval *e, lval *f, lval *a)
   }
 
   while (a->count > 0) {
-    lval *formal = lval_pop(f->formals, 0);
+    lval *formal = lval_pop(f->formals);
 
     if (strcmp(formal->sym, "&") == 0) { // if we encounter the `&` sign (variable parameters)
       if (f->formals->count != 1) {
@@ -267,14 +267,14 @@ lval_call(lval *e, lval *f, lval *a)
 			"Symbol `&` not followed by a single symbol.");
       }
       /* Bind the next formal to the remaining arguments */
-      lval *nsym = lval_pop(f->formals, 0);
+      lval *nsym = lval_pop(f->formals);
       lval_put(new_env, nsym, builtin_list(e, a));
       lval_del(formal);
       lval_del(nsym);
       break;
     }
 
-    lval *val = lval_pop(a, 0);
+    lval *val = lval_pop(a);
     lval_put(new_env, lval_copy(formal), lval_copy(val)); // Here's where we bind formals to values
     lval_del(val);
     lval_del(formal);
@@ -292,8 +292,8 @@ lval_call(lval *e, lval *f, lval *a)
 		      "Symbol '&' not followed by single symbol.");
     }
     /* Pop and delete '&' symbol */
-    lval_del(lval_pop(f->formals, 0));
-    lval *sym = lval_pop(f->formals, 0);
+    lval_del(lval_pop(f->formals));
+    lval *sym = lval_pop(f->formals);
     lval *val = lval_sexp();
     lval_put(e, sym, val);
     lval_del(sym); lval_del(val);
@@ -332,7 +332,7 @@ print_lval(lval *v)
     if (v->builtin) {
       printf("<builtin fn>");
     } else {
-      print_lval(v->env);
+      //print_lval(v->env);
       printf("(\\ "); print_lval(v->formals);
       putchar(' '); print_lval(v->body); putchar(')');
     }
@@ -392,7 +392,7 @@ lval_eval_sexp(lval *e, lval *v)
     return lval_copy(v); // return `()` as-is
   }
 
-  lval *first = lval_eval(e, lval_pop(v, 0)); // pops off the first element
+  lval *first = lval_eval(e, lval_pop(v)); // pops off the first element
   if (first->type == LVAL_MACRO) { // Short-circuit evaluation
     return lval_call(e, first, v);
   } else if (first->type == LVAL_ERR) {
@@ -419,21 +419,20 @@ lval_eval_sexp(lval *e, lval *v)
 }
 
 lval *
-lval_pop(lval *v, int i) // pop off the first child of the sexp (car)
+lval_pop(lval *v) // pop off the first child of the sexp (car)
 {
-  lval *x = v->cell[i];
-
+  lval *x = v->cell[0];
   // shift the lvals after i to the left
-  memmove(&v->cell[i], &v->cell[i + 1], sizeof(lval *) * (v->count - i));
+  memmove(&v->cell[0], &v->cell[1], sizeof(lval *) * v->count);
   v->count--;
   v->cell = realloc(v->cell, sizeof(lval *) * v->count);
   return x;
 }
 
 lval *
-lval_take(lval *v, int i) // like pop but delete the resulting list
+lval_take(lval *v) // like pop but delete the resulting list
 {
-  lval *x = lval_pop(v, i);
+  lval *x = lval_pop(v);
   lval_del(v);
   return x;
 }
@@ -453,6 +452,7 @@ lval_add(lval *v, lval *x)
 lval *
 lval_get(lval *dict, char *name)
 {
+  TYPEASSERT(dict, dict->type, LVAL_DICT, "lval_get");
   lval *v;
   if ((v = map_get(dict->dict, name))) {
     return v;
@@ -526,11 +526,11 @@ builtin_lambda(lval *e, lval *args)
 {
   ARGNUM(args, 2, "<builtin lambda>");
   // Make sure `formals` contains only symbols
-  lval *formals = lval_pop(args, 0);
+  lval *formals = lval_pop(args);
   for (int i = 0; i < formals->count; i++) {
     TYPEASSERT(args, formals->cell[i]->type, LVAL_SYM, "builtin_lambda");
   }
-  lval *body = lval_take(args, 0);
+  lval *body = lval_take(args);
   return lval_lambda(e, formals, body);
 }
 
@@ -548,8 +548,8 @@ builtin_greaterthan(lval *e, lval *args)
 	    "ERROR: Cannot operate on non-number!");
   }
   ARGNUM(args, 2, ">"); /* Make sure we have 2 args */
-  lval *l = lval_pop(args, 0);
-  lval *r = lval_pop(args, 0);
+  lval *l = lval_pop(args);
+  lval *r = lval_pop(args);
   lval *result = lval_bool(l->num > r->num);
   lval_del(args);
   return result;
@@ -559,8 +559,8 @@ lval *builtin_lessthan(lval *e, lval *args) {return builtin_op(e, "<", args);}
 
 lval *builtin_equal(lval *e, lval *args) {
   ARGNUM(args, 2, "=");
-  lval *x = lval_pop(args, 0);
-  lval *y = lval_pop(args, 0);
+  lval *x = lval_pop(args);
+  lval *y = lval_pop(args);
   if (x->type != y->type) {
     lval_del(args);
     return lval_bool(false);
@@ -634,9 +634,8 @@ builtin_head(lval *e, lval *args) // Returns the first element of a sexp
   LASSERT(args, args->cell[0]->count != 0,
 	  "ERROR: Cannot take head of an empty SEXP!");
 
-  lval *v = lval_take(args, 0);
-  while (v->count > 1) lval_del(lval_pop(v, 1)); // pop & delete the second lval leaving only the head
-  return lval_take(v, 0);
+  lval *v = lval_take(args);
+  return lval_take(v);
 }
 
 lval *
@@ -649,8 +648,8 @@ builtin_tail(lval *e, lval *args) // Returns the cdr of a sexp
   LASSERT(args, args->cell[0]->count > 0,
 	  "ERROR: Cannot take tail of an empty SEXP!");
 
-  lval *v = lval_take(args, 0);
-  lval_del(lval_pop(v, 0)); // pop & delete the first lval leaving the cdr
+  lval *v = lval_take(args);
+  lval_del(lval_pop(v)); // pop & delete the first lval leaving the cdr
   lval *result = lval_copy(v);
   lval_del(v);
   return result;
@@ -664,10 +663,10 @@ builtin_join(lval *e, lval *args) // Join together one or more sexps
 	  "ERROR: Function join passed 0 arguments!");
   lval *v = lval_sexp();
   while (args->count > 0) {
-    lval *a = lval_pop(args, 0);
+    lval *a = lval_pop(args);
     LASSERT(a, a->type == LVAL_SEXP,
 	    "ERROR: Cannot take tail of a non-SEXP!");
-    while (a->count > 0) lval_add(v, lval_pop(a, 0));
+    while (a->count > 0) lval_add(v, lval_pop(a));
     lval_del(a);
   }
 
@@ -682,9 +681,10 @@ builtin_cons(lval *e, lval *args)
   LASSERT(args, args->cell[1]->type == LVAL_SEXP,
 	  "ERROR: Cons function requires a SEXP as a second argument");
   lval *q = lval_sexp();
-  lval_add(q, args->cell[0]);
-  lval *a = lval_pop(args, 1);
-  while (a->count > 0) lval_add(q, lval_pop(a, 0));
+  lval_add(q, lval_pop(args));
+  lval *a = lval_take(args);
+  while (a->count > 0) lval_add(q, lval_pop(a));
+  lval_del(a);
   return q;
 }
 
@@ -707,7 +707,7 @@ builtin_eval(lval *e, lval *args)
   /* LASSERT(args, args->cell[0]->type == LVAL_SEXP, */
   /* 	  "ERROR: Cannot eval a non-SEXP!"); */
 
-  lval *x = lval_take(args, 0);
+  lval *x = lval_take(args);
   return lval_eval(e, x);
 }
 
@@ -719,10 +719,10 @@ builtin_op(lval *e, char *op, lval *args) // apply fn to args
 	    "ERROR: Cannot operate on non-number!");
   }
 
-  lval *first = lval_pop(args, 0);
+  lval *first = lval_pop(args);
 
   while (args->count > 0) {
-    lval *v = lval_pop(args, 0);
+    lval *v = lval_pop(args);
     if (strcmp(op, "+") == 0) first->num += v->num;
     if (strcmp(op, "-") == 0) first->num -= v->num;
     if (strcmp(op, "*") == 0) first->num *= v->num;
@@ -742,13 +742,13 @@ builtin_if(lval *e, lval *args)
 {
   ARGNUM(args, 3, "if");
 
-  lval *cond = lval_eval(e, lval_pop(args, 0));
+  lval *cond = lval_eval(e, lval_pop(args));
   if (cond->type != LVAL_BOOL) {
     return lval_err("ERROR: First argument to `if` must be a BOOL, recieved `%s`.",
 		    ltype_name(cond->type));
   }
-  lval *body = lval_pop(args, 0);
-  lval *elsebody = lval_pop(args, 0);
+  lval *body = lval_pop(args);
+  lval *elsebody = lval_pop(args);
   lval *result;
   if (cond->boolean) {
   result = lval_eval(e, body);
@@ -766,11 +766,11 @@ lval *
 builtin_def(lval *e, lval *a)
 {
   ARGNUM(a, 2, "def");
-  lval *name = lval_pop(a, 0);
+  lval *name = lval_pop(a);
   LASSERT(name, name->type == LVAL_SYM,
 	  "ERROR: Function `%s` not passed a SYMBOL as argument 1!", "def");
 
-  lval *value = lval_eval(e, lval_take(a, 0));
+  lval *value = lval_eval(e, lval_take(a));
   if (value->type == LVAL_ERR)
     return value;
   lval_put(e, name, value);
