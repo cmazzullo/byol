@@ -17,7 +17,6 @@ run_repl(mpc_parser_t *Input, lenv *e)
   while (strcmp(line, "quit\n") != 0) {
     printf("> ");
     fgets(line, MAXLINE, stdin);
-
     if (mpc_parse("<stdin>", line, Input, &r)) {
       mpc_ast_t *ast_input = r.output;
       lval *lval_input = read(ast_input);
