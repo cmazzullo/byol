@@ -5,58 +5,31 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "map.h"
-#include "core.h"
 
 #define ARRAYSIZE 1024
 #define MAXKEY 256 // Max key length
 
-struct list {
-  lval *val;
-  char *key;
-  list *next;
-};
-
 struct map { // hash map with chaining
   list **data; // Array of list pointers
-  char **keys;
-  int nkeys; // number of keys
+  list *keys;
 };
 
-
-list *
-new_list(char *key, lval *val)
+int
+hash(lval *key)
 {
-  list *n = calloc(1, sizeof(list));
-  n->key = malloc(sizeof(char) * MAXKEY);
-  strncpy(n->key, key, MAXKEY);
-  n->val = val;
-  return n;
-}
+  char *keystr = get_sym(key);
+  int h = 1;
 
-list *cdr(list *l) {return l->next;}
-
-list *
-cons(char *key, lval *val, list *l)
-{
-  list *head = new_list(key, val);
-  head->next = l;
-  return head;
-}
-
-lval */* Search through a list for the val associated w/ `key` */
-list_get(list *l, char *key)
-{
-  if (l) { // if l is not NULL
-    if (strcmp(l->key, key) == 0) {
-      return l->val;
-    } else {
-      return list_get(cdr(l), key);
-    }
-  } else {
-    return NULL; // return filler value
+  char c;
+  int i = 0;
+  while((c = keystr[i]) != '\0') {
+    h = h + (i * c);
+    i++;
   }
+  return (943287 * h) % ARRAYSIZE;
 }
 
 map *
@@ -64,8 +37,7 @@ map_new(void)
 {
   map *m = calloc(1, sizeof(map));
   m->data = calloc(ARRAYSIZE, sizeof(list *));
-  m->keys = calloc(ARRAYSIZE, sizeof(char *));
-  m->nkeys = 0;
+  m->keys = NULL;
   return m;
 }
 
@@ -73,8 +45,10 @@ map *
 map_copy(map *m)
 {
   map *x = map_new();
-  for (int i = 0; i < m->nkeys; i++) { // for each key in m
-    map_add(x, m->keys[i], map_get(m, m->keys[i])); // add the val to x
+  list *keys = m->keys;
+  while (keys) {
+    map_add(x, first(keys), map_get(m, first(keys)));
+    keys = rest(keys);
   }
   return x;
 }
@@ -82,73 +56,61 @@ map_copy(map *m)
 void
 map_del(map *m)
 {
+  list *l = m->keys;
+  while (l) {
+    map_remove(m, first(l));
+    l = rest(l);
+  }
   free(m->data);
-  free(m->keys);
+  delete_list(m->keys);
   free(m);
 }
 
+/* Remove a key:value pair from the map */
 void
-map_add(map *m, char *key, lval *val)
+map_remove(map *m, lval *key)
 {
-  int h = hash(key);
-  if (m->data[h]) { // if the list at `h` isn't null
-    m->data[h] = cons(key, val, m->data[h]);
-  } else {
-    m->data[h] = new_list(key, val);
-  }
-
-  m->keys = realloc(m->keys, sizeof(char *) * (m->nkeys + 1));
-  m->keys[m->nkeys] = malloc(sizeof(char) * MAXKEY);
-  strncpy(m->keys[m->nkeys], key, MAXKEY);
-  m->nkeys++;
+  m->keys = list_remove(m->keys, key);
+  m->data[hash(key)] = list_remove(m->data[hash(key)], key);
 }
+
+/*
+   Add a key:value pair to the map. NOTE: If `key` is already in the
+   map, its value is overwritten by the new value!
+*/
+void
+map_add(map *m, lval *key, lval *val)
+{
+  if (map_contains(m, key)) {map_remove(m, key);}
+  int h = hash(key);
+  // The pair is stored as a 2-element linked list:
+  lval *pair = lval_sexp();
+  lval_cons(pair, key);
+  lval_cons(pair, val);
+  m->data[h] = cons(pair, m->data[h]);
+  m->keys = cons(key, m->keys);
+}
+
+/* Wrapper around map_get that returns a bool */
+bool map_contains(map *m, lval *key) { return map_get(m, key) == NULL; }
 
 lval *
-map_get(map *m, char *key)
+map_get(map *m, lval *key)
 {
   list *l = m->data[hash(key)];
-  return list_get(l, key);
+  return list_get(l, key); // returns NULL if key isn't found/list is NULL
 }
 
-int
-hash(char *key)
-{
-  int h = 1;
-
-  char c;
-  int i = 0;
-  while((c = key[i]) != '\0') {
-    h = h + (i * c);
-    i++;
-  }
-  return (943287 * h) % ARRAYSIZE;
-}
 
 void
 map_print(map *m)
 {
+  list *keys = m->keys;
   printf("{\n");
-  for(int i = 0; i < m->nkeys; i++) {
-
-    printf("  %s: ", m->keys[i]);
-    print_lval(map_get(m, m->keys[i]));
+  while (keys) {
+    print_lval(first(keys));
     putchar('\n');
+    keys = rest(keys);
   }
   printf("}\n");
 }
-
-/* int */
-/* main(int argc, char **argv) { */
-/*   map *m = map_new(); */
-/*   lval *l1 = lval_num(1); */
-/*   lval *l2 = lval_err("ERROR: I'm an error"); */
-/*   lval *l3 = lval_sym("mysym"); */
-/*   map_add(m, "first", l1); */
-/*   map_add(m, "second", l2); */
-/*   map_add(m, "third", l3); */
-/*   map_print(m); */
-/*   map *m2 = map_copy(m); */
-/*   map_add(m2, "fourth", lval_num(22)); */
-/*   map_print(m2); */
-/*   return 0; */
-/* } */
