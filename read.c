@@ -3,6 +3,24 @@
 #include "read.h"
 
 lval *
+read_num(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
+{
+  long x = strtol(t->contents, NULL, 10);
+  if (errno != ERANGE) return lval_num(x);
+  else return lval_err("ERROR: Invalid number!");
+}
+
+lval *
+read_bool(mpc_ast_t *t)
+{
+  if (strcmp(t->contents, "true") == 0) {
+    return lval_bool(true);
+  } else {
+    return lval_bool(false);
+  }
+}
+
+lval *
 read(mpc_ast_t *t) // convert the AST into a sexp
 {
   // if the tree is the root, return its first child
@@ -28,23 +46,4 @@ read(mpc_ast_t *t) // convert the AST into a sexp
     lval_cons(v, read(t->children[i]));
   }
   return v;
-}
-
-
-lval *
-read_num(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
-{
-  long x = strtol(t->contents, NULL, 10);
-  if (errno != ERANGE) return lval_num(x);
-  else return lval_err("ERROR: Invalid number!");
-}
-
-lval *
-read_bool(mpc_ast_t *t)
-{
-  if (strcmp(t->contents, "true") == 0) {
-    return lval_bool(true);
-  } else {
-    return lval_bool(false);
-  }
 }
