@@ -3,17 +3,16 @@
 
 typedef struct list list;
 
-#include "core.h"
+#include "lval.h"
 
-list *new_list(lval * data, list *next);
-void delete_list(list *l);
-lval *first(list *l);
-list *rest(list *l);
-list *cons(lval * e, list *l);
-list *list_remove(list *l, lval *key);
-void print_list(list *l);
-int count(list *l);
-list *copy_list(list *l);
-lval *list_get(list *l, lval *k);
+list *list_new(lval *data, list *next);
+void list_delete(list *l);
+list *list_copy(list *l);
+void list_print(list *l);
+
+lval *list_first(list *l);
+list *list_rest(list *l);
+list *list_cons(lval * e, list *l);
+int list_count(list *l);
 
 #endif

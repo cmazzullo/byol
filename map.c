@@ -8,7 +8,8 @@
 #include <stdbool.h>
 
 #include "map.h"
-
+#include "list.h"
+#include "environment.h"
 #define ARRAYSIZE 1024
 #define MAXKEY 256 // Max key length
 
@@ -47,22 +48,22 @@ map_copy(map *m)
   map *x = map_new();
   list *keys = m->keys;
   while (keys) {
-    map_add(x, first(keys), map_get(m, first(keys)));
-    keys = rest(keys);
+    map_add(x, list_first(keys), map_get(m, list_first(keys)));
+    keys = list_rest(keys);
   }
   return x;
 }
 
 void
-map_del(map *m)
+map_delete(map *m)
 {
   list *l = m->keys;
   while (l) {
-    map_remove(m, first(l));
-    l = rest(l);
+    map_remove(m, list_first(l));
+    l = list_rest(l);
   }
   free(m->data);
-  delete_list(m->keys);
+  list_delete(m->keys);
   free(m);
 }
 
@@ -87,8 +88,8 @@ map_add(map *m, lval *key, lval *val)
   lval *pair = lval_sexp();
   lval_cons(pair, key);
   lval_cons(pair, val);
-  m->data[h] = cons(pair, m->data[h]);
-  m->keys = cons(key, m->keys);
+  m->data[h] = list_cons(pair, m->data[h]);
+  m->keys = list_cons(key, m->keys);
 }
 
 /* Wrapper around map_get that returns a bool */
@@ -108,9 +109,9 @@ map_print(map *m)
   list *keys = m->keys;
   printf("{\n");
   while (keys) {
-    print_lval(first(keys));
+    print_lval(list_first(keys));
     putchar('\n');
-    keys = rest(keys);
+    keys = list_rest(keys);
   }
   printf("}\n");
 }

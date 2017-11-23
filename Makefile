@@ -1,4 +1,4 @@
-OBJS=core.o builtin.o map.o read.o list.o
+OBJS=lval.o builtin.o map.o read.o list.o
 
 run: repl
 	./repl

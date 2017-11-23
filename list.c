@@ -14,7 +14,7 @@ struct list {
 };
 
 list *
-new_list(lval *data, list *next)
+list_new(lval *data, list *next)
 {
   list *x = malloc(sizeof(list));
   x->data = data;
@@ -23,60 +23,61 @@ new_list(lval *data, list *next)
 }
 
 list *
-copy_list(list *l)
+list_copy(list *l)
 {
-  if (!l) NULL;
-  return new_list(lval_copy(first(l)), copy_list(rest(l)));
+  if (!l) return NULL;
+  return list_new(lval_copy(list_first(l)), list_copy(list_rest(l)));
 }
 
 int
-count(list *l)
+list_count(list *l)
 {
-  if (!l) 0;
-  return 1 + count(rest(l));
+  if (!l) return 0;
+  return 1 + list_count(list_rest(l));
 }
 
 void
-delete_list(list *l)
+list_delete(list *l)
 {
   if (!l) { return; }
-  delete_list(rest(l));
+  list_delete(list_rest(l));
   free(l);
 }
 
-lval *first(list *l) {return l->data;}
-list *rest(list *l) {return l->next;}
-list *cons(lval *e, list *l) {return new_list(e, l);}
+lval *list_first(list *l) {return l->data;}
+list *list_rest(list *l) {return l->next;}
+list *list_cons(lval *e, list *l) {return list_new(e, l);}
 
 void
-print_list(list *l)
+list_print(list *l)
 {
   if (l) {
-    printf("%d ", first(l));
-    print_list(rest(l));
+    print_lval(list_first(l));
+    list_print(list_rest(l));
   } else {
     putchar('\n');
   }
 }
 
-/* Search through l for e and remove it */
-list *
-list_remove(list *l, lval *key)
-{
-  if (!l) { return NULL; }
-  if (strcmp(get_sym(key), get_sym(first(l))) == 0) {
-    return rest(l);
-  } else {
-    return cons(first(l), list_remove(rest(l), key));
-  }
-}
 
-lval *list_get(list *l, lval *k)
-{
-  if (!l) { return NULL; }
-  else if (strcmp(get_sym(lval_first(first(l))), get_sym(k)) == 0) {
-    return first(l);
-  } else {
-    return list_get(rest(l), k);
-  }
-}
+/* void main() { */
+
+/*   lval *x = lval_sym("x"); */
+/*   lval *y = lval_sym("y"); */
+/*   lval *z = lval_sym("z"); */
+
+/*   list *l = list_new(x, list_new(y, list_new(z, NULL))); */
+/*   list_print(l); */
+
+/*   list_print(list_cons(x, l)); */
+
+/*   printf("count = %d\n", list_count(l)); */
+
+/*   lval *q = lval_copy(x); */
+/*   list *copy = list_copy(l); */
+/*   copy = list_cons(x, copy); */
+/*   list_print(copy); */
+/*   list_print(l); */
+
+/*   list_delete(l); */
+/* } */

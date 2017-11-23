@@ -1,5 +1,5 @@
 #include "mpc/mpc.h"
-#include "core.h"
+#include "lval.h"
 #include "read.h"
 
 #include <stdio.h>
