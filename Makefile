@@ -1,9 +1,11 @@
-repl: repl.c core.o map.o
-	etags *
-	gcc -g -o repl --std=c99 -Wall mpc/mpc.c core.c map.c repl.c
-
-map.o core.o: map.c core.c
-	gcc -c --std=c99 -Wall mpc/mpc.c map.c core.c -I.
+OBJS=lval.o builtin.o map.o read.o list.o environment.o
 
 run: repl
 	./repl
+
+repl: repl.c $(OBJS)
+	etags *
+	gcc -g -o repl repl.c $(OBJS) mpc/mpc.c --std=c99 -Wall -I.
+
+clean:
+	rm *.o *.gch

@@ -1,0 +1,33 @@
+#include <stdio.h>
+#include <string.h>
+#include "environment.h"
+#include "map.h"
+#include "list.h"
+#include "lval.h"
+
+
+lenv *lenv_new() { return list_new(lval_dict(), NULL); }
+
+lenv *lenv_copy(lenv *e) { return list_copy(e); }
+
+void
+lenv_print(lenv *e)
+{
+  printf("<Environment>:\n");
+  list_print(e);
+}
+
+/* Iterates through every map in the list to find `k` */
+lval *
+lenv_get(lenv *e, lval *k)
+{
+  if (!e) { return NULL; }
+  lval *v = lval_get(list_first(e), k);
+  if (v) {
+    return v;
+  } else {
+    return lenv_get(list_rest(e), k);
+  }
+}
+
+void lenv_set(lenv *e, lval *k, lval *v) { lval_put(list_first(e), k, v); }
