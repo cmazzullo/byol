@@ -48,6 +48,7 @@ void env_add_builtins(lval *e);
 int get_num(lval *l);
 bool get_bool(lval *l);
 int get_count(lval *l);
+bool is_empty(lval *l);
 bool empty(lval *l);
 char *get_err(lval *l);
 char *get_sym(lval *l);

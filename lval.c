@@ -319,6 +319,7 @@ lval_call(lval* fn, lval *args)
 lval *
 lval_eval_sexp(lval *e, lval *s)
 {
+  if (is_empty(s)) { return s; } // Return `()`
   lval *first = lval_eval(e, lval_first(s));
   if (get_type(first) == LVAL_MACRO) { return lval_call(first, lval_rest(s)); }
   if (get_type(first) != LVAL_FN) {
@@ -388,6 +389,7 @@ char *get_sym(lval *l) {return l->sym;}
 int get_type(lval *l) {return l->type;}
 list *get_cell(lval *l) {return l->cell;}
 int get_count(lval *l){ return list_count(get_cell(l)); }
+bool is_empty(lval *l){ return list_count(get_cell(l)) == 0; }
 bool empty(lval *l) { return get_count(l) == 0; }
 
 lbuiltin get_builtin(lval *x) {return x->builtin;}
