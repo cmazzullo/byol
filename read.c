@@ -37,7 +37,8 @@ read(mpc_ast_t *t) // convert the AST into a sexp
     v = lval_sexp();
   }
   // fill the empty sexp with any expressions within
-  for (int i = 0; i < t->children_num; i++) {
+  // need to go through backwards for the cons to work
+  for (int i = t->children_num - 1; i >= 0; i--) {
     if (strcmp(t->children[i]->tag, "regex") == 0) { continue; } // skip the noise
     if (strcmp(t->children[i]->contents, "(") == 0) { continue; }
     if (strcmp(t->children[i]->contents, ")") == 0) { continue; }

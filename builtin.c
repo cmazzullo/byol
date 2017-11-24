@@ -70,8 +70,9 @@ builtin_op(lval *e, char *op, lval *args)
 {
   lval *first = lval_first(args);
   long result;
-  while (get_count(args) > 0) {
-    lval *v = lval_first(lval_rest(args));
+  args = lval_rest(args);
+  while (!is_empty(args)) {
+    lval *v = lval_first(args);
     if (strcmp(op, "+") == 0) result = get_num(first) + get_num(v);
     if (strcmp(op, "-") == 0) result = get_num(first) - get_num(v);
     if (strcmp(op, "*") == 0) result = get_num(first) * get_num(v);
@@ -79,7 +80,7 @@ builtin_op(lval *e, char *op, lval *args)
       LASSERT(v, get_num(v) != 0, "ERROR: Division by zero!");
       result = get_num(first) / get_num(v);
     }
-    lval_del(v);
+    args = lval_rest(args);
   }
   lval_del(args);
   return lval_num(result);
