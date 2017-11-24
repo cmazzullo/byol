@@ -1,24 +1,33 @@
 #include <stdio.h>
 #include <string.h>
 #include "environment.h"
-/* Search through l for e and remove it */
-list *
-list_remove(list *l, lval *key)
+#include "map.h"
+#include "list.h"
+#include "lval.h"
+
+
+lenv *lenv_new() { return list_new(lval_dict(), NULL); }
+
+lenv *lenv_copy(lenv *e) { return list_copy(e); }
+
+void
+lenv_print(lenv *e)
 {
-  if (!l) { return NULL; }
-  if (strcmp(get_sym(key), get_sym(list_first(l))) == 0) {
-    return list_rest(l);
+  printf("<Environment>:\n");
+  list_print(e);
+}
+
+/* Iterates through every map in the list to find `k` */
+lval *
+lenv_get(lenv *e, lval *k)
+{
+  if (!e) { return NULL; }
+  lval *v = lval_get(list_first(e), k);
+  if (v) {
+    return v;
   } else {
-    return list_cons(list_first(l), list_remove(list_rest(l), key));
+    return lenv_get(list_rest(e), k);
   }
 }
 
-lval *list_get(list *l, lval *k)
-{
-  if (!l) { return NULL; }
-  else if (strcmp(get_sym(lval_first(list_first(l))), get_sym(k)) == 0) {
-    return list_first(l);
-  } else {
-    return list_get(list_rest(l), k);
-  }
-}
+void lenv_set(lenv *e, lval *k, lval *v) { lval_put(list_first(e), k, v); }

@@ -159,36 +159,36 @@ map_print(map *m)
   printf("}\n");
 }
 
-void main() {
+/* void main() { */
 
-  printf("LIST TESTS: \n\n");
-  lval *x = lval_sym("x");
-  lval *y = lval_sym("y");
-  lval *z = lval_sym("z");
-  lval *q = lval_sym("q");
+/*   printf("LIST TESTS: \n\n"); */
+/*   lval *x = lval_sym("x"); */
+/*   lval *y = lval_sym("y"); */
+/*   lval *z = lval_sym("z"); */
+/*   lval *q = lval_sym("q"); */
 
-  /* list *l = list_new(x, list_new(y, list_new(z, NULL))); */
-  lval *pair1 = lval_cons(lval_cons(lval_sexp(), x), y);
-  lval *pair2 = lval_cons(lval_cons(lval_sexp(), z), q);
-  list *l = list_new(pair1, NULL);
-  list_print(l); putchar('\n');
-  l = list_cons(pair2, l);
-  list_print(l); putchar('\n');
+/*   /\* list *l = list_new(x, list_new(y, list_new(z, NULL))); *\/ */
+/*   lval *pair1 = lval_cons(lval_cons(lval_sexp(), x), y); */
+/*   lval *pair2 = lval_cons(lval_cons(lval_sexp(), z), q); */
+/*   list *l = list_new(pair1, NULL); */
+/*   list_print(l); putchar('\n'); */
+/*   l = list_cons(pair2, l); */
+/*   list_print(l); putchar('\n'); */
 
-  printf("MAP TESTS: \n\n");
-  l = list_remove_pair(l, q);
-  list_print(l); putchar('\n');
-  l = list_remove_pair(l, y);
-  list_print(l); putchar('\n');
-  x = lval_sym("x");
-  y = lval_sym("y");
-  z = lval_sym("z");
-  q = lval_sym("q");
-  map *m = map_new();
-  map_add(m, x, y);
-  map_add(m, z, q);
-  map_print(m);
-  map_add(m, z, x);
-  map_print(m);
-  map_delete(m);
-}
+/*   printf("MAP TESTS: \n\n"); */
+/*   l = list_remove_pair(l, q); */
+/*   list_print(l); putchar('\n'); */
+/*   l = list_remove_pair(l, y); */
+/*   list_print(l); putchar('\n'); */
+/*   x = lval_sym("x"); */
+/*   y = lval_sym("y"); */
+/*   z = lval_sym("z"); */
+/*   q = lval_sym("q"); */
+/*   map *m = map_new(); */
+/*   map_add(m, x, y); */
+/*   map_add(m, z, q); */
+/*   map_print(m); */
+/*   map_add(m, z, x); */
+/*   map_print(m); */
+/*   map_delete(m); */
+/* } */

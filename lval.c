@@ -255,7 +255,7 @@ print_lval(lval *v)
   case LVAL_SEXP:
     putchar('(');
     list_print(get_cell(v));
-    putchar(')');
+    printf(")");
     break;
   case LVAL_BOOL:
     if (v->boolean)

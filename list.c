@@ -16,7 +16,7 @@ struct list {
 list *
 list_new(lval *data, list *next)
 {
-  list *x = malloc(sizeof(list));
+  list *x = calloc(1, sizeof(list));
   x->data = data;
   x->next = next;
   return x;
@@ -48,36 +48,20 @@ lval *list_first(list *l) {return l->data;}
 list *list_rest(list *l) {return l->next;}
 list *list_cons(lval *e, list *l) {return list_new(e, l);}
 
-void
-list_print(list *l)
+static void
+print_helper(list *l)
 {
   if (l) {
     print_lval(list_first(l));
-    list_print(list_rest(l));
-  } else {
-    putchar('\n');
+    if (list_rest(l)) { putchar(' '); }
+    print_helper(list_rest(l));
   }
 }
 
-
-/* void main() { */
-
-/*   lval *x = lval_sym("x"); */
-/*   lval *y = lval_sym("y"); */
-/*   lval *z = lval_sym("z"); */
-
-/*   list *l = list_new(x, list_new(y, list_new(z, NULL))); */
-/*   list_print(l); */
-
-/*   list_print(list_cons(x, l)); */
-
-/*   printf("count = %d\n", list_count(l)); */
-
-/*   lval *q = lval_copy(x); */
-/*   list *copy = list_copy(l); */
-/*   copy = list_cons(x, copy); */
-/*   list_print(copy); */
-/*   list_print(l); */
-
-/*   list_delete(l); */
-/* } */
+void
+list_print(list *l)
+{
+  printf("[");
+  print_helper(l);
+  printf("]");
+}
