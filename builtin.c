@@ -1,27 +1,32 @@
+#include "lval.h"
+#include "list.h"
 #include "builtin.h"
+#include "structs.h"
+#include "environment.h"
+
 #include <string.h>
 #include <stdlib.h>
 
 /* Adds a builtin to the environment */
 void
-env_add_builtin(lval *e, char *name, lbuiltin fn)
+env_add_builtin(lenv *e, char *name, lbuiltin fn)
 {
   lval *v = lval_builtin_function(fn);
-  lval_put(e, lval_sym(name), lval_copy(v));
+  lenv_set(e, lval_sym(name), lval_copy(v));
   lval_del(v);
 }
 
 /* Adds a macro to the environment */
 void
-env_add_builtin_macro(lval *e, char *name, lbuiltin fn)
+env_add_builtin_macro(lenv *e, char *name, lbuiltin fn)
 {
   lval *v = lval_builtin_macro(fn);
-  lval_put(e, lval_sym(name), lval_copy(v));
+  lenv_set(e, lval_sym(name), lval_copy(v));
   lval_del(v);
 }
 
 void
-env_add_builtins(lval *e)
+env_add_builtins(lenv *e)
 {
   env_add_builtin_macro(e, "\\", builtin_lambda);
   env_add_builtin_macro(e, "macro", builtin_macro);
@@ -44,7 +49,7 @@ env_add_builtins(lval *e)
 
 /* Given args (formals, body), returns a function or macro */
 lval *
-builtin_func(lval *e, lval *args, char *func_name)
+builtin_func(lenv *e, lval *args, char *func_name)
 {
   ARGNUM(args, 2, "<builtin lambda>");
   // Make sure `formals` contains only symbols
@@ -61,38 +66,40 @@ builtin_func(lval *e, lval *args, char *func_name)
   }
 }
 
-lval *builtin_macro(lval *e, lval *a) {return builtin_func(e, a, "macro");}
-lval *builtin_lambda(lval *e, lval *a) {return builtin_func(e, a, "lambda");}
+lval *builtin_macro(lenv *e, lval *a) {return builtin_func(e, a, "macro");}
+lval *builtin_lambda(lenv *e, lval *a) {return builtin_func(e, a, "lambda");}
 
 /* Operations on numbers */
 lval *
-builtin_op(lval *e, char *op, lval *args)
+builtin_op(lenv *e, char *op, lval *args)
 {
-  lval *first = lval_first(args);
   long result;
-  args = lval_rest(args);
+  if ((strcmp(op, "+") == 0) || (strcmp(op, "-") == 0)) {
+    result = 0;
+  } else {
+    result = 1;
+  }
   while (!is_empty(args)) {
-    lval *v = lval_first(args);
-    if (strcmp(op, "+") == 0) result = get_num(first) + get_num(v);
-    if (strcmp(op, "-") == 0) result = get_num(first) - get_num(v);
-    if (strcmp(op, "*") == 0) result = get_num(first) * get_num(v);
+    long x = get_num(lval_first(args));
+    if (strcmp(op, "+") == 0) result += x;
+    if (strcmp(op, "-") == 0) result -= x;
+    if (strcmp(op, "*") == 0) result *= x;
     if (strcmp(op, "/") == 0) {
-      LASSERT(v, get_num(v) != 0, "ERROR: Division by zero!");
-      result = get_num(first) / get_num(v);
+      LASSERT(args, x != 0, "ERROR: Division by zero!");
+      result /= x;
     }
     args = lval_rest(args);
   }
-  lval_del(args);
   return lval_num(result);
 }
 
-lval *builtin_add(lval *e, lval *args) {return builtin_op(e, "+", args);}
-lval *builtin_sub(lval *e, lval *args) {return builtin_op(e, "-", args);}
-lval *builtin_multiply(lval *e, lval *args) {return builtin_op(e, "*", args);}
-lval *builtin_divide(lval *e, lval *args) {return builtin_op(e, "/", args);}
+lval *builtin_add(lenv *e, lval *args) {return builtin_op(e, "+", args);}
+lval *builtin_sub(lenv *e, lval *args) {return builtin_op(e, "-", args);}
+lval *builtin_multiply(lenv *e, lval *args) {return builtin_op(e, "*", args);}
+lval *builtin_divide(lenv *e, lval *args) {return builtin_op(e, "/", args);}
 
 lval *
-builtin_greaterthan(lval *e, lval *args)
+builtin_greaterthan(lenv *e, lval *args)
 {
   ARGNUM(args, 2, ">"); /* Make sure we have 2 args */
   lval *l = lval_first(args);
@@ -102,65 +109,21 @@ builtin_greaterthan(lval *e, lval *args)
   return result;
 }
 
-lval *builtin_lessthan(lval *e, lval *args) {return builtin_op(e, "<", args);}
+lval *builtin_lessthan(lenv *e, lval *args) {return builtin_op(e, "<", args);}
 
-lval *builtin_equal(lval *e, lval *args) {
+lval *builtin_equal(lenv *e, lval *args) {
   ARGNUM(args, 2, "=");
   lval *x = lval_first(args);
-  lval *y = lval_first(lval_rest(args));
-  if (get_type(x) != get_type(y)) {
-    lval_del(args);
-    return lval_bool(false);
-  }
-  bool result;
-  switch (get_type(x)) {
-  case LVAL_BOOL:
-    result = get_bool(x) == get_bool(y);
-    break;
-  case LVAL_NUM:
-    result = get_num(x) == get_num(y);
-    break;
-  case LVAL_ERR:
-    result = strcmp(get_err(x), get_err(y)) == 0;
-    break;
-  case LVAL_SYM:
-    result = strcmp(get_sym(x), get_sym(y)) == 0;
-    break;
-  case LVAL_SEXP:
-    if (get_count(x) == 0 && get_count(y) == 0) {
-      result = true;
-    } else if (get_count(x) == 0 || get_count(y) == 0) {
-      result = false;
-    } else {
-      result = builtin_equal(lval_first(x), lval_first(lval_rest(y))) && builtin_equal(x, y);
-    }
-    break;
-  case LVAL_MACRO:
-  case LVAL_FN:
-    if (get_builtin(x) && get_builtin(y)) {
-      result = get_builtin(x) == get_builtin(y);
-    } else if (!get_builtin(x) && !get_builtin(y)) {
-      lval *formals = lval_sexp();
-      lval_cons(formals, get_formals(x));
-      lval_cons(formals, get_formals(y));
-      lval *bodys = lval_sexp();
-      lval_cons(bodys, get_body(x));
-      lval_cons(bodys, get_body(y));
-      result = get_bool(builtin_equal(e, formals)) && get_bool(builtin_equal(e, bodys));
-    } else {
-      result = false;
-    }
-  }
-  lval_del(args);
-  return lval_bool(result);
+  lval *y = lval_nth(args, 1);
+  return lval_bool(lval_equal(x, y));
 }
 
 /* Operations on lists */
 // Takes one or more args, returns a sexp containing them:
-lval *builtin_list(lval *e, lval *args) { return args; }
+lval *builtin_list(lenv *e, lval *args) { return args; }
 
 lval *
-builtin_head(lval *e, lval *args) // Returns the first element of a sexp
+builtin_head(lenv *e, lval *args) // Returns the first element of a sexp
 {
   ARGNUM(args, 1, "head");
   LASSERT(args, get_type(lval_first(args)) == LVAL_SEXP,
@@ -174,7 +137,7 @@ builtin_head(lval *e, lval *args) // Returns the first element of a sexp
 }
 
 lval *
-builtin_tail(lval *e, lval *args) // Returns the cdr of a sexp
+builtin_tail(lenv *e, lval *args) // Returns the cdr of a sexp
 {
 
   ARGNUM(args, 1, "tail");
@@ -187,16 +150,16 @@ builtin_tail(lval *e, lval *args) // Returns the cdr of a sexp
 }
 
 lval *
-builtin_cons(lval *e, lval *args)
+builtin_cons(lenv *e, lval *args)
 {
   ARGNUM(args, 2, "cons");
   LASSERT(args, get_type(lval_first(lval_rest(args))) == LVAL_SEXP,
 	  "ERROR: Cons function requires a SEXP as a second argument");
-  return lval_cons(lval_first(args), e);
+  return lval_cons(lval_rest(args), lval_first(args));
 }
 
 lval *
-builtin_eval(lval *e, lval *args)
+builtin_eval(lenv *e, lval *args)
 {
   ARGNUM(args, 1, "eval");
   return lval_eval(e, lval_first(args));
@@ -205,7 +168,7 @@ builtin_eval(lval *e, lval *args)
 
 /* Macro: if cond body else-body */
 lval *
-builtin_if(lval *e, lval *args)
+builtin_if(lenv *e, lval *args)
 {
   ARGNUM(args, 3, "if");
 
@@ -230,7 +193,7 @@ builtin_if(lval *e, lval *args)
 
 // Local variable definition
 lval *
-builtin_def(lval *e, lval *a)
+builtin_def(lenv *e, lval *a)
 {
   ARGNUM(a, 2, "def");
   lval *name = lval_first(a);
@@ -238,6 +201,6 @@ builtin_def(lval *e, lval *a)
 	  "ERROR: Function `%s` not passed a SYMBOL as argument 1!", "def");
   lval *value = lval_eval(e, lval_nth(a, 1));
   if (get_type(value) == LVAL_ERR) { return value; }
-  lval_put(e, name, value);
+  lenv_set(e, name, value);
   return value;
 }

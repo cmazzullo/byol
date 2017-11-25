@@ -36,9 +36,12 @@ test_map_h(void)
   lval *pair1 = lval_cons(lval_cons(lval_sexp(), x), y);
   lval *pair2 = lval_cons(lval_cons(lval_sexp(), z), q);
   list *l = list_new(pair1, NULL);
-  l = list_cons(pair2, l);
+  list_print(l);
+   l = list_cons(pair2, l);
+  list_print(l);
   assert(list_count(l) == 2);
-  l = list_remove_pair(l, q);
+   l = list_remove_pair(l, q);
+  list_print(l);
   assert(list_count(l) == 1);
 
   l = list_remove_pair(l, y);
@@ -94,7 +97,7 @@ int
 main() {
   test_list_h();
   test_map_h();
-  test_lval_h();
-  test_environment_h();
+  // test_lval_h();
+  // test_environment_h();
   printf("Success! All tests passed.\n");
 }

@@ -6,10 +6,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #include "map.h"
 #include "list.h"
 #include "environment.h"
+#include "lval.h"
 #define ARRAYSIZE 1024
 #define MAXKEY 256 // Max key length
 
@@ -21,16 +23,19 @@ struct map { // hash map with chaining
 int
 hash(lval *key)
 {
-  char *keystr = get_sym(key);
   int h = 1;
+  char *keystr = get_sym(key);
+  int keylen = strlen(keystr);
 
   char c;
-  int i = 0;
-  while((c = keystr[i]) != '\0') {
-    h = h + (i * c);
+  for (int i = 0; i < keylen; i++) {
+    c = keystr[i];
+    h = h + ((i + 12) * c);
     i++;
   }
-  return (943287 * h) % ARRAYSIZE;
+  h = abs(943287 * h) % ARRAYSIZE;
+  assert(h >= 0);
+  return h;
 }
 
 // List helper functions
@@ -40,9 +45,9 @@ list *
 list_remove_pair(list *l, lval *k)
 {
   if (!l) { return l; }
-  char *list_key = get_sym(lval_first(list_first(l)));
+  lval *list_key = lval_first(list_first(l));
   // if the sym `k` and the sym in the current node are equal:
-  if (strcmp(list_key, get_sym(k)) == 0) {
+  if (lval_equal(list_key, k)) {
     return list_rest(l);
   } else {
     return list_cons(list_first(l), list_remove_pair(list_rest(l), k));
@@ -66,7 +71,8 @@ lval *
 list_get(list *l, lval *k)
 {
   if (!l) { return NULL; }
-  if (strcmp(get_sym(lval_first(list_first(l))), get_sym(k)) == 0) {
+  lval *head = list_first(l);
+  if (lval_equal(lval_first(head), k)) {
     return lval_first(lval_rest(list_first(l)));
   } else {
     return list_get(list_rest(l), k);
@@ -158,37 +164,3 @@ map_print(map *m)
   }
   printf("}\n");
 }
-
-/* void main() { */
-
-/*   printf("LIST TESTS: \n\n"); */
-/*   lval *x = lval_sym("x"); */
-/*   lval *y = lval_sym("y"); */
-/*   lval *z = lval_sym("z"); */
-/*   lval *q = lval_sym("q"); */
-
-/*   /\* list *l = list_new(x, list_new(y, list_new(z, NULL))); *\/ */
-/*   lval *pair1 = lval_cons(lval_cons(lval_sexp(), x), y); */
-/*   lval *pair2 = lval_cons(lval_cons(lval_sexp(), z), q); */
-/*   list *l = list_new(pair1, NULL); */
-/*   list_print(l); putchar('\n'); */
-/*   l = list_cons(pair2, l); */
-/*   list_print(l); putchar('\n'); */
-
-/*   printf("MAP TESTS: \n\n"); */
-/*   l = list_remove_pair(l, q); */
-/*   list_print(l); putchar('\n'); */
-/*   l = list_remove_pair(l, y); */
-/*   list_print(l); putchar('\n'); */
-/*   x = lval_sym("x"); */
-/*   y = lval_sym("y"); */
-/*   z = lval_sym("z"); */
-/*   q = lval_sym("q"); */
-/*   map *m = map_new(); */
-/*   map_add(m, x, y); */
-/*   map_add(m, z, q); */
-/*   map_print(m); */
-/*   map_add(m, z, x); */
-/*   map_print(m); */
-/*   map_delete(m); */
-/* } */

@@ -1,6 +1,7 @@
 #include "mpc/mpc.h"
 #include "lval.h"
 #include "read.h"
+#include "environment.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +12,7 @@
 // MAIN ////////////////////////////////////////////////////////////////////////////////
 
 void
-run_repl(mpc_parser_t *Input, lval *e)
+run_repl(mpc_parser_t *Input, lenv *e)
 {
   char *line = malloc(MAXLINE * sizeof (char));
   mpc_result_t r;
@@ -53,12 +54,12 @@ main (int argc, char **argv)
   exp : <bool> | <num> | <symbol> | <sexp> ; \
   input : /^/ <exp>? /$/ ;", Bool, Num, Symbol, Sexp, Exp, Input);
 
-  lval* e = lval_dict(); // create the environment
+  lenv *e = lenv_new(NULL); // Create the global environment
   env_add_builtins(e);
 
   run_repl(Input, e);
 
-  lval_del(e);
+  lenv_delete(e);
   mpc_cleanup(6, Bool, Num, Symbol, Sexp, Exp, Input);
   return 0;
 }

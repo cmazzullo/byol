@@ -1,9 +1,7 @@
 #ifndef MAP_H
 #define MAP_H
 
-#include "lval.h"
-
-typedef struct map map;
+#include "structs.h"
 
 map *map_new(void);
 void map_delete(map *m);

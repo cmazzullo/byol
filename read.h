@@ -2,7 +2,7 @@
 #define READ_H
 
 #include "mpc/mpc.h"
-#include "lval.h"
+#include "structs.h"
 
 lval *read(mpc_ast_t *t);
 

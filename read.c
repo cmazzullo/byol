@@ -1,5 +1,5 @@
 #include <string.h>
-
+#include "lval.h"
 #include "read.h"
 
 lval *

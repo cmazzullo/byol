@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "list.h"
+#include "lval.h"
 typedef struct list list;
 
 struct list {
@@ -41,6 +42,7 @@ list_delete(list *l)
 {
   if (!l) { return; }
   list_delete(list_rest(l));
+  lval_del(list_first(l));
   free(l);
 }
 
@@ -48,7 +50,7 @@ lval *list_first(list *l) {return l->data;}
 list *list_rest(list *l) {return l->next;}
 list *list_cons(lval *e, list *l) {return list_new(e, l);}
 
-static void
+void
 print_helper(list *l)
 {
   if (l) {

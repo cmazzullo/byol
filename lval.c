@@ -1,6 +1,8 @@
-#include "mpc/mpc.h"
-#include "map.h"
 #include "lval.h"
+#include "list.h"
+#include "mpc/mpc.h"
+#include "environment.h"
+#include "map.h"
 #include "builtin.h"
 
 #include <string.h>
@@ -23,7 +25,7 @@ struct lval { // lisp value
 
   /* Function/Macro */
   lbuiltin builtin;
-  lval *env;
+  lenv *env;
   lval *formals;
   lval *body;
 
@@ -54,7 +56,7 @@ ltype_name(int t)
 lval *
 lval_num(long x) // create new number
 {
-  lval *v = malloc(sizeof(lval));
+  lval *v = calloc(1, sizeof(lval));
   v->type = LVAL_NUM;
   v->num = x;
   return v;
@@ -63,7 +65,7 @@ lval_num(long x) // create new number
 lval *
 lval_dict(void)
 {
-  lval *v = malloc(sizeof(lval));
+  lval *v = calloc(1, sizeof(lval));
   v->type = LVAL_DICT;
   v->dict = map_new();
   return v;
@@ -72,7 +74,7 @@ lval_dict(void)
 lval *
 lval_bool(bool boolean)
 {
-  lval *v = malloc(sizeof(lval));
+  lval *v = calloc(1, sizeof(lval));
   v->type = LVAL_BOOL;
   v->boolean = boolean;
   return v;
@@ -81,10 +83,10 @@ lval_bool(bool boolean)
 lval *
 lval_err(char *fmt, ...) // create new error
 {
-  lval *v = malloc(sizeof(lval));
+  lval *v = calloc(1, sizeof(lval));
   va_list ap;
   va_start(ap, fmt);
-  v->err = malloc(MAXERR * sizeof(char));
+  v->err = calloc(1, MAXERR * sizeof(char));
   vsnprintf(v->err, MAXERR, fmt, ap);
   va_end(ap);
   v->type = LVAL_ERR;
@@ -94,31 +96,30 @@ lval_err(char *fmt, ...) // create new error
 lval *
 lval_sym(char *sym) // create new symbol
 {
-  lval *v = malloc(sizeof(lval));
+  lval *v = calloc(1, sizeof(lval));
   v->type = LVAL_SYM;
-  v->sym = malloc(strlen(sym) + 1);
+  v->sym = calloc(1, strlen(sym) + 1);
   strcpy(v->sym, sym);
   return v;
 }
 
 // Returns a user-defined function w/ env, formals and body
 lval *
-lval_lambda(lval *env, lval *formals, lval *body)
+lval_lambda(lenv *env, lval *formals, lval *body)
 {
-  TYPEASSERT(env, env->type, LVAL_DICT, "lval_lambda");
-  lval *v = malloc(sizeof(lval));
+  lval *v = calloc(1, sizeof(lval));
   v->type = LVAL_FN;
   v->builtin = NULL; // no builtin, this is a user defined func
   v->formals = formals;
   v->body = body;
-  v->env = lval_copy(env);
+  v->env = lenv_new(env);
   return v;
 }
 
 lval *
-lval_macro(lval *env, lval *formals, lval *body) // create new user-defined macro
+lval_macro(lenv *e, lval *formals, lval *body) // create new user-defined macro
 {
-  lval *v = lval_lambda(env, formals, body);
+  lval *v = lval_lambda(e, formals, body);
   v->type = LVAL_MACRO;
   return v;
 }
@@ -126,7 +127,7 @@ lval_macro(lval *env, lval *formals, lval *body) // create new user-defined macr
 lval *
 lval_builtin_function(lbuiltin fn)
 {
-  lval *v = malloc(sizeof(lval));
+  lval *v = calloc(1, sizeof(lval));
   v->type = LVAL_FN;
   v->formals = NULL;
   v->body = NULL;
@@ -145,7 +146,7 @@ lval_builtin_macro(lbuiltin fn) // create new empty macro
 lval *
 lval_sexp(void) // create new empty sexp
 {
-  lval *v = malloc(sizeof(lval));
+  lval *v = calloc(1, sizeof(lval));
   v->type = LVAL_SEXP;
   v->cell = NULL;
   return v;
@@ -163,7 +164,7 @@ lval_del(lval *v) // free memory for an lval
   case LVAL_MACRO:
   case LVAL_FN:
     if (!v->builtin) {
-      lval_del(v->env);
+      lenv_delete(v->env);
       lval_del(v->formals);
       lval_del(v->body);
     }
@@ -199,14 +200,14 @@ lval_copy(lval *v)
     if (v->builtin) {
       x = lval_builtin_macro(v->builtin);
     } else {
-      x = lval_macro(lval_copy(v->env), lval_copy(v->formals), lval_copy(v->body));
+      x = lval_macro(lenv_copy(v->env), lval_copy(v->formals), lval_copy(v->body));
     }
     break;
   case LVAL_FN:
     if (v->builtin) {
       x = lval_builtin_function(v->builtin);
     } else {
-      x = lval_lambda(lval_copy(v->env), lval_copy(v->formals), lval_copy(v->body));
+      x = lval_lambda(lenv_copy(v->env), lval_copy(v->formals), lval_copy(v->body));
     }
     break;
   case LVAL_ERR:
@@ -221,6 +222,51 @@ lval_copy(lval *v)
     break;
   }
   return x;
+}
+
+bool
+lval_equal(lval *x, lval *y)
+{
+  if (get_type(x) != get_type(y)) { return lval_bool(false); }
+  switch (get_type(x)) {
+  case LVAL_BOOL:
+    return get_bool(x) == get_bool(y);
+    break;
+  case LVAL_NUM:
+    return get_num(x) == get_num(y);
+    break;
+  case LVAL_ERR:
+    return strcmp(get_err(x), get_err(y)) == 0;
+    break;
+  case LVAL_SYM:
+    return strcmp(get_sym(x), get_sym(y)) == 0;
+    break;
+  case LVAL_SEXP:
+    if (get_count(x) == 0 && get_count(y) == 0) {
+      return true;
+    } else if (get_count(x) == 0 || get_count(y) == 0) {
+      return false;
+    } else {
+      return lval_equal(lval_first(x), lval_first(y)) &&
+	lval_equal(lval_rest(x), lval_rest(y));
+    }
+    break;
+  case LVAL_MACRO:
+  case LVAL_FN:
+    if (get_builtin(x) && get_builtin(y)) {
+      return get_builtin(x) == get_builtin(y);
+    } else if (!get_builtin(x) && !get_builtin(y)) {
+      return lval_equal(get_formals(x), get_formals(y)) &&
+	lval_equal(get_body(x), get_body(y));
+    } else {
+      return false;
+    }
+    break;
+  case LVAL_DICT:
+    return false; // TODO fix this
+    break;
+  }
+  return false;
 }
 
 void
@@ -254,7 +300,7 @@ print_lval(lval *v)
   case LVAL_SYM: printf(v->sym); break;
   case LVAL_SEXP:
     putchar('(');
-    list_print(get_cell(v));
+    list_print(v->cell); // print the internal linked list of lvals
     printf(")");
     break;
   case LVAL_BOOL:
@@ -299,13 +345,13 @@ lval *
 lval_call(lval* fn, lval *args)
 {
   if (fn->builtin) return fn->builtin(fn->env, args);
-  lval *new_e = lval_copy(fn->env);
+  lenv *new_e = lenv_new(fn->env);
   lval *formals = fn->formals;
   while (!empty(args)) {
     if (empty(formals)) {
       return lval_err("ERROR: Function passed too many arguments.");
     }
-    lval_put(new_e, lval_first(formals), lval_first(args));
+    lenv_set(new_e, lval_first(formals), lval_first(args));
     formals = lval_rest(formals);
     args = lval_rest(args);
   }
@@ -317,11 +363,12 @@ lval_call(lval* fn, lval *args)
 }
 
 lval *
-lval_eval_sexp(lval *e, lval *s)
+lval_eval_sexp(lenv *e, lval *s)
 {
   if (is_empty(s)) { return s; } // Return `()`
   lval *first = lval_eval(e, lval_first(s));
   if (get_type(first) == LVAL_MACRO) { return lval_call(first, lval_rest(s)); }
+  if (get_type(first) == LVAL_ERR) { return first; }
   if (get_type(first) != LVAL_FN) {
     return lval_err("ERROR: First element of a SEXP must be a function or macro, recieved `%s`",
 		    ltype_name(get_type(first)));
@@ -337,15 +384,15 @@ lval_eval_sexp(lval *e, lval *s)
     rest = lval_rest(rest);
   }
 
-  lval_call(first, children);
+  return lval_call(first, children);
 }
 
 lval *
-lval_eval(lval *e, lval *v) // evaluates an lval recursively
+lval_eval(lenv *e, lval *v) // evaluates an lval recursively
 {
   switch (v->type) {
   case LVAL_SYM:
-    return lval_get(e, v);
+    return lenv_get(e, v);
     break;
   case LVAL_SEXP:
     return lval_eval_sexp(e, v);
@@ -387,13 +434,12 @@ bool get_bool(lval *l) {return l->boolean;}
 char *get_err(lval *l) {return l->err;}
 char *get_sym(lval *l) {return l->sym;}
 int get_type(lval *l) {return l->type;}
-list *get_cell(lval *l) {return l->cell;}
-int get_count(lval *l){ return list_count(get_cell(l)); }
-bool is_empty(lval *l){ return list_count(get_cell(l)) == 0; }
+int get_count(lval *l){ return list_count(l->cell); }
+bool is_empty(lval *l){ return list_count(l->cell) == 0; }
 bool empty(lval *l) { return get_count(l) == 0; }
 
 lbuiltin get_builtin(lval *x) {return x->builtin;}
 
 lval *get_formals(lval *fn) { return fn->formals; }
-lval *get_env(lval *fn) { return fn->env; }
+lenv *get_env(lval *fn) { return fn->env; }
 lval *get_body(lval *fn) { return fn->body; }

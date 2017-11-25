@@ -1,9 +1,7 @@
 #ifndef LIST_H
 #define LIST_H
 
-typedef struct list list;
-
-#include "lval.h"
+#include "structs.h"
 
 list *list_new(lval *data, list *next);
 void list_delete(list *l);
