@@ -1,3 +1,7 @@
+/*
+  Builtin functions
+ */
+
 #include "lval.h"
 #include "list.h"
 #include "builtin.h"
@@ -45,6 +49,7 @@ env_add_builtins(lenv *e)
   env_add_builtin(e, "*", builtin_multiply, FUNCTION);
   env_add_builtin(e, "/", builtin_divide, FUNCTION);
   env_add_builtin(e, ">", builtin_greaterthan, FUNCTION);
+  env_add_builtin(e, "<", builtin_lessthan, FUNCTION);
 }
 
 /* Given args (formals, body), returns a function or macro */
@@ -70,33 +75,42 @@ lval *builtin_macro(lenv *e, lval *a) {return builtin_func(e, a, "macro");}
 lval *builtin_lambda(lenv *e, lval *a) {return builtin_func(e, a, "lambda");}
 
 /* Operations on numbers */
+
 lval *
-builtin_op(lenv *e, char *op, lval *args)
-{
-  long result;
-  if ((strcmp(op, "+") == 0) || (strcmp(op, "-") == 0)) {
-    result = 0;
-  } else {
-    result = 1;
-  }
-  while (!is_empty(args)) {
-    long x = get_num(lval_first(args));
-    if (strcmp(op, "+") == 0) result += x;
-    if (strcmp(op, "-") == 0) result -= x;
-    if (strcmp(op, "*") == 0) result *= x;
-    if (strcmp(op, "/") == 0) {
-      LASSERT(args, x != 0, "ERROR: Division by zero!");
-      result /= x;
-    }
-    args = lval_rest(args);
-  }
-  return lval_num(result);
+builtin_add(lenv *e, lval *args) {
+  if (is_empty(args)) { return lval_num(0); }
+  long x = get_num(lval_first(args));
+  long y = get_num(builtin_add(e, lval_rest(args)));
+  return lval_num(x + y);
 }
 
-lval *builtin_add(lenv *e, lval *args) {return builtin_op(e, "+", args);}
-lval *builtin_sub(lenv *e, lval *args) {return builtin_op(e, "-", args);}
-lval *builtin_multiply(lenv *e, lval *args) {return builtin_op(e, "*", args);}
-lval *builtin_divide(lenv *e, lval *args) {return builtin_op(e, "/", args);}
+
+lval *
+builtin_sub(lenv *e, lval *args) {
+  if (is_empty(args)) { return lval_num(0); }
+  long x = get_num(lval_first(args));
+  long y = get_num(builtin_sub(e, lval_rest(args)));
+  return lval_num(x - y);
+}
+
+
+lval *
+builtin_multiply(lenv *e, lval *args) {
+  if (is_empty(args)) { return lval_num(1); }
+  long x = get_num(lval_first(args));
+  long y = get_num(builtin_multiply(e, lval_rest(args)));
+  return lval_num(x * y);
+}
+
+
+lval *
+builtin_divide(lenv *e, lval *args) {
+  if (is_empty(args)) { return lval_num(1); }
+  long x = get_num(lval_first(args));
+  long y = get_num(builtin_divide(e, lval_rest(args)));
+  return lval_num(x / y);
+}
+
 
 lval *
 builtin_greaterthan(lenv *e, lval *args)
@@ -109,7 +123,16 @@ builtin_greaterthan(lenv *e, lval *args)
   return result;
 }
 
-lval *builtin_lessthan(lenv *e, lval *args) {return builtin_op(e, "<", args);}
+lval *builtin_lessthan(lenv *e, lval *args)
+{
+  print_lval(args);
+  ARGNUM(args, 2, "<");
+  lval *l = lval_first(args);
+  lval *r = lval_first(lval_rest(args));
+  lval *result = lval_bool(get_num(l) < get_num(r));
+  lval_del(args);
+  return result;
+}
 
 lval *builtin_equal(lenv *e, lval *args) {
   ARGNUM(args, 2, "=");

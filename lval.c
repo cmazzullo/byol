@@ -381,12 +381,10 @@ lval_eval_sexp(lenv *e, lval *s)
   // Now we know we have a function as the first element
   lval *rest = lval_rest(s);
   lval *children = lval_sexp();
-
-  while (!empty(rest)) {
-    lval *child = lval_eval(e, lval_first(rest));
+  for (int i = get_count(rest) - 1; i >= 0; i--) {
+    lval *child = lval_eval(e, lval_nth(rest, i));
     if (get_type(child) == LVAL_ERR) { return child; } // check for errors
     lval_cons(children, child); // accumulate evalled children
-    rest = lval_rest(rest);
   }
 
   return lval_call(first, children);
