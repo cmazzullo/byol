@@ -2,6 +2,8 @@
 #include "lval.h"
 #include "map.h"
 #include "environment.h"
+#include "builtin.h"
+#include "read.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,11 +95,18 @@ test_environment_h(void)
   lenv_delete(e1);
 }
 
+void
+test_integration(void)
+{
+lval *read(mpc_ast_t *t);
+}
+
 int
 main() {
   test_list_h();
   test_map_h();
   test_lval_h();
   test_environment_h();
+  test_integration();
   printf("Success! All tests passed.\n");
 }

@@ -1,3 +1,4 @@
+#include "read.h"
 #include "mpc/mpc.h"
 #include "lval.h"
 #include "read.h"
@@ -11,33 +12,25 @@
 
 // MAIN ////////////////////////////////////////////////////////////////////////////////
 
+
 void
 run_repl(mpc_parser_t *Input, lenv *e)
 {
   char *line = malloc(MAXLINE * sizeof (char));
-  mpc_result_t r;
   while (strcmp(line, "quit\n") != 0) {
     printf("> ");
     fgets(line, MAXLINE, stdin);
-    if (mpc_parse("<stdin>", line, Input, &r)) {
-      mpc_ast_t *ast_input = r.output;
-      lval *lval_input = read(ast_input);
-      lval *result = lval_eval(e, lval_input);
-      print_lval(result);
-      putchar('\n');
-      mpc_ast_delete(r.output);
-    } else { // catch syntax errors here
-      mpc_err_print(r.error);
-      mpc_err_delete(r.error);
-    }
+    lval *input = read_line(Input, line);
+    lval *output = lval_eval(e, input);
+    print_lval(output);
+    putchar('\n');
   }
   free(line);
   putchar('\n');
 }
 
-/* Main loop, provides a REPL */
-int
-main (int argc, char **argv)
+mpc_parser_t *
+make_parser(void)
 {
   mpc_parser_t *Bool = mpc_new("bool");
   mpc_parser_t *Num = mpc_new("num");
@@ -54,12 +47,20 @@ main (int argc, char **argv)
   exp : <bool> | <num> | <symbol> | <sexp> ; \
   input : /^/ <exp>? /$/ ;", Bool, Num, Symbol, Sexp, Exp, Input);
 
+  return Input;
+}
+
+/* Main loop, provides a REPL */
+int
+main (int argc, char **argv)
+{
+
   lenv *e = lenv_new(NULL); // Create the global environment
   env_add_builtins(e);
 
-  run_repl(Input, e);
+  run_repl(make_parser(), e);
 
   lenv_delete(e);
-  mpc_cleanup(6, Bool, Num, Symbol, Sexp, Exp, Input);
+  //  mpc_cleanup(6, Bool, Num, Symbol, Sexp, Exp, Input);
   return 0;
 }

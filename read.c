@@ -1,6 +1,6 @@
-#include <string.h>
-#include "lval.h"
 #include "read.h"
+#include <string.h>
+
 
 lval *
 read_num(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
@@ -17,6 +17,19 @@ read_bool(mpc_ast_t *t)
     return lval_bool(true);
   } else {
     return lval_bool(false);
+  }
+}
+
+lval *
+read_line(mpc_parser_t *Input, char *line)
+{
+  mpc_result_t r;
+  if (mpc_parse("<stdin>", line, Input, &r)) {
+    lval *lval_input = read(r.output);
+    mpc_ast_delete(r.output);
+    return lval_input;
+  } else {
+    return lval_err("ERROR: Syntax error!");
   }
 }
 

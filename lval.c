@@ -112,7 +112,7 @@ lval_lambda(lenv *env, lval *formals, lval *body)
   v->builtin = NULL; // no builtin, this is a user defined func
   v->formals = formals;
   v->body = body;
-  v->env = lenv_new(env);
+  v->env = env;
   return v;
 }
 
@@ -346,6 +346,7 @@ lval *
 lval_call(lval* fn, lval *args)
 {
   if (fn->builtin) return fn->builtin(fn->env, args);
+  //lenv *new_e = fn->env;
   lenv *new_e = lenv_new(fn->env);
   lval *formals = fn->formals;
   while (!empty(args)) {
@@ -368,7 +369,10 @@ lval_eval_sexp(lenv *e, lval *s)
 {
   if (is_empty(s)) { return s; } // Return `()`
   lval *first = lval_eval(e, lval_first(s));
-  if (get_type(first) == LVAL_MACRO) { return lval_call(first, lval_rest(s)); }
+  if (get_type(first) == LVAL_MACRO) {
+    first->env = e; // Give macros access to the current environment
+    return lval_call(first, lval_rest(s));
+  }
   if (get_type(first) == LVAL_ERR) { return first; }
   if (get_type(first) != LVAL_FN) {
     return lval_err("ERROR: First element of a SEXP must be a function or macro, recieved `%s`",
@@ -415,7 +419,7 @@ lval_get(lval *dict, lval *name)
   if ((v = map_get(dict->dict, name))) {
     return v;
   } else {
-    return lval_err("ERROR: Variable `%s` not found", name);
+    return lval_err("ERROR: Variable `%s` not found", get_sym(name));
   }
 }
 

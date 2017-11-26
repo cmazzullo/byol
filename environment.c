@@ -24,9 +24,9 @@ lenv_print(lenv *e)
 lval *
 lenv_get(lenv *e, lval *k)
 {
-  if (!e) { return NULL; }
+  if (!e) { return lval_err("ERROR: Variable not found!"); }
   lval *v = lval_get(list_first(e), k);
-  if (v) {
+  if (get_type(v) != LVAL_ERR) {
     return v;
   } else {
     return lenv_get(list_rest(e), k);
