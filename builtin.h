@@ -18,6 +18,8 @@ lval *builtin_def(lenv *e, lval *args);
 
 lval *builtin_if(lenv *e, lval *args);
 
+void env_add_builtins(lenv *e);
+
 lval *builtin_add(lenv *e, lval *args);
 lval *builtin_sub(lenv *e, lval *args);
 lval *builtin_multiply(lenv *e, lval *args);

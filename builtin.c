@@ -7,44 +7,44 @@
 #include <string.h>
 #include <stdlib.h>
 
+enum { FUNCTION, MACRO };
+
 /* Adds a builtin to the environment */
 void
-env_add_builtin(lenv *e, char *name, lbuiltin fn)
+env_add_builtin(lenv *e, char *name, lbuiltin fn, int type)
 {
-  lval *v = lval_builtin_function(fn);
-  lenv_set(e, lval_sym(name), lval_copy(v));
-  lval_del(v);
-}
-
-/* Adds a macro to the environment */
-void
-env_add_builtin_macro(lenv *e, char *name, lbuiltin fn)
-{
-  lval *v = lval_builtin_macro(fn);
-  lenv_set(e, lval_sym(name), lval_copy(v));
-  lval_del(v);
+  lval *v;
+  switch (type) {
+  case FUNCTION:
+    v = lval_builtin_function(e, fn);
+    break;
+  case MACRO:
+    v = lval_builtin_macro(e, fn);
+    break;
+  }
+  lenv_set(e, lval_sym(name), v);
 }
 
 void
 env_add_builtins(lenv *e)
 {
-  env_add_builtin_macro(e, "\\", builtin_lambda);
-  env_add_builtin_macro(e, "macro", builtin_macro);
-  env_add_builtin_macro(e, "if", builtin_if);
-  env_add_builtin_macro(e, "def", builtin_def);
+  env_add_builtin(e, "\\", builtin_lambda, MACRO);
+  env_add_builtin(e, "macro", builtin_macro, MACRO);
+  env_add_builtin(e, "if", builtin_if, MACRO);
+  env_add_builtin(e, "def", builtin_def, MACRO);
 
-  env_add_builtin(e, "list", builtin_list);
-  env_add_builtin(e, "head", builtin_head);
-  env_add_builtin(e, "tail", builtin_tail);
-  env_add_builtin(e, "eval", builtin_eval);
-  env_add_builtin(e, "cons", builtin_cons);
-  env_add_builtin(e, "=", builtin_equal);
+  env_add_builtin(e, "list", builtin_list, FUNCTION);
+  env_add_builtin(e, "head", builtin_head, FUNCTION);
+  env_add_builtin(e, "tail", builtin_tail, FUNCTION);
+  env_add_builtin(e, "eval", builtin_eval, FUNCTION);
+  env_add_builtin(e, "cons", builtin_cons, FUNCTION);
+  env_add_builtin(e, "=", builtin_equal, FUNCTION);
 
-  env_add_builtin(e, "+", builtin_add);
-  env_add_builtin(e, "-", builtin_sub);
-  env_add_builtin(e, "*", builtin_multiply);
-  env_add_builtin(e, "/", builtin_divide);
-  env_add_builtin(e, ">", builtin_greaterthan);
+  env_add_builtin(e, "+", builtin_add, FUNCTION);
+  env_add_builtin(e, "-", builtin_sub, FUNCTION);
+  env_add_builtin(e, "*", builtin_multiply, FUNCTION);
+  env_add_builtin(e, "/", builtin_divide, FUNCTION);
+  env_add_builtin(e, ">", builtin_greaterthan, FUNCTION);
 }
 
 /* Given args (formals, body), returns a function or macro */
@@ -201,6 +201,8 @@ builtin_def(lenv *e, lval *a)
 	  "ERROR: Function `%s` not passed a SYMBOL as argument 1!", "def");
   lval *value = lval_eval(e, lval_nth(a, 1));
   if (get_type(value) == LVAL_ERR) { return value; }
-  lenv_set(e, name, value);
-  return value;
+
+  //list *parent = list_first(list_rest(e));
+  lenv_set(e, name, lval_copy(value));
+  return lval_bool(true);
 }

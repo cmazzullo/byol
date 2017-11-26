@@ -125,20 +125,21 @@ lval_macro(lenv *e, lval *formals, lval *body) // create new user-defined macro
 }
 
 lval *
-lval_builtin_function(lbuiltin fn)
+lval_builtin_function(lenv *e, lbuiltin fn)
 {
   lval *v = calloc(1, sizeof(lval));
   v->type = LVAL_FN;
   v->formals = NULL;
   v->body = NULL;
+  v->env = e;
   v->builtin = fn;
   return v;
 }
 
 lval *
-lval_builtin_macro(lbuiltin fn) // create new empty macro
+lval_builtin_macro(lenv *e, lbuiltin fn) // create new empty macro
 {
-  lval *v = lval_builtin_function(fn);
+  lval *v = lval_builtin_function(e, fn);
   v->type = LVAL_MACRO;
   return v;
 }
@@ -198,14 +199,14 @@ lval_copy(lval *v)
     break;
   case LVAL_MACRO:
     if (v->builtin) {
-      x = lval_builtin_macro(v->builtin);
+      x = lval_builtin_macro(lenv_copy(v->env), v->builtin);
     } else {
       x = lval_macro(lenv_copy(v->env), lval_copy(v->formals), lval_copy(v->body));
     }
     break;
   case LVAL_FN:
     if (v->builtin) {
-      x = lval_builtin_function(v->builtin);
+      x = lval_builtin_function(lenv_copy(v->env), v->builtin);
     } else {
       x = lval_lambda(lenv_copy(v->env), lval_copy(v->formals), lval_copy(v->body));
     }

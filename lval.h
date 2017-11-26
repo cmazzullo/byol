@@ -31,15 +31,13 @@ lval *lval_err(char *fmt, ...);
 
 lval *lval_lambda(lenv *e, lval *formals, lval *body);
 lval *lval_macro(lenv *e, lval *formals, lval *body);
-lval *lval_builtin_function(lbuiltin fn);
-lval *lval_builtin_macro(lbuiltin fn);
+lval *lval_builtin_function(lenv *e, lbuiltin fn);
+lval *lval_builtin_macro(lenv *e, lbuiltin fn);
 
 // Environment
 
 lval *lval_get(lval *d, lval *name);
 lval *lval_put(lval *d, lval *name, lval *v);
-void env_add_builtin(lenv *e, char *name, lbuiltin fn);
-void env_add_builtins(lenv *e);
 
 // Accessor
 
