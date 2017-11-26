@@ -12,6 +12,7 @@
 #include <stdbool.h> // for boolean values
 
 #define MAXERR 1024 // Maximum error string length
+#define MAXSTR 1024 // Maximum string length
 
 
 struct lval { // lisp value
@@ -34,6 +35,9 @@ struct lval { // lisp value
 
   /* Dict */
   map *dict;
+
+  /* String */
+  char *str;
 };
 
 char * /* Given an lval type, return its name */
@@ -48,6 +52,7 @@ ltype_name(int t)
   case LVAL_FN: return "fn";
   case LVAL_BOOL: return "bool";
   case LVAL_DICT: return "dict";
+  case LVAL_STRING: return "string";
   default: return "unknown";
   }
 }
@@ -59,6 +64,16 @@ lval_num(long x) // create new number
   lval *v = calloc(1, sizeof(lval));
   v->type = LVAL_NUM;
   v->num = x;
+  return v;
+}
+
+lval *
+lval_string(char *str)
+{
+  lval *v = calloc(1, sizeof(lval));
+  v->type = LVAL_STRING;
+  v->str = malloc(strlen(str) + 1);
+  v->str = strcpy(v->str, str);
   return v;
 }
 
@@ -178,6 +193,10 @@ lval_del(lval *v) // free memory for an lval
     break;
   case LVAL_SEXP:
     list_delete(v->cell);
+    break;
+  case LVAL_STRING:
+    free(v->str);
+    break;
   }
   free(v);
 }
@@ -220,6 +239,9 @@ lval_copy(lval *v)
   case LVAL_SEXP:
     x = lval_sexp();
     x->cell = list_copy(v->cell);
+    break;
+  case LVAL_STRING:
+    x = lval_string(v->str);
     break;
   }
   return x;
@@ -266,6 +288,8 @@ lval_equal(lval *x, lval *y)
   case LVAL_DICT:
     return false; // TODO fix this
     break;
+  case LVAL_STRING:
+    return strcmp(x->str, y->str) == 0;
   }
   return false;
 }
@@ -292,7 +316,6 @@ print_lval(lval *v)
     if (v->builtin) {
       printf("<builtin fn>");
     } else {
-      //print_lval(v->env);
       printf("(\\ "); print_lval(v->formals);
       putchar(' '); print_lval(v->body); putchar(')');
     }
@@ -308,6 +331,9 @@ print_lval(lval *v)
     if (v->boolean)
       printf("true");
     else printf("false");
+    break;
+  case LVAL_STRING:
+    printf("\"%s\"", v->str);
     break;
   }
 }
@@ -343,9 +369,9 @@ lval_cons(lval *v, lval *x)
 }
 
 lval *
-lval_call(lval* fn, lval *args)
+lval_call(lenv *e, lval* fn, lval *args)
 {
-  if (fn->builtin) return fn->builtin(fn->env, args);
+  if (fn->builtin) return fn->builtin(e, args);
   //lenv *new_e = fn->env;
   lenv *new_e = lenv_new(fn->env);
   lval *formals = fn->formals;
@@ -371,7 +397,7 @@ lval_eval_sexp(lenv *e, lval *s)
   lval *first = lval_eval(e, lval_first(s));
   if (get_type(first) == LVAL_MACRO) {
     first->env = e; // Give macros access to the current environment
-    return lval_call(first, lval_rest(s));
+    return lval_call(e, first, lval_rest(s));
   }
   if (get_type(first) == LVAL_ERR) { return first; }
   if (get_type(first) != LVAL_FN) {
@@ -387,7 +413,7 @@ lval_eval_sexp(lenv *e, lval *s)
     lval_cons(children, child); // accumulate evalled children
   }
 
-  return lval_call(first, children);
+  return lval_call(e, first, children);
 }
 
 lval *
@@ -401,7 +427,7 @@ lval_eval(lenv *e, lval *v) // evaluates an lval recursively
     return lval_eval_sexp(e, v);
     break;
   default: /* Numbers, functions, errors and bools evaluate to themselves */
-    return lval_copy(v);
+    return v;
     break;
   }
 }
@@ -446,3 +472,4 @@ lbuiltin get_builtin(lval *x) {return x->builtin;}
 lval *get_formals(lval *fn) { return fn->formals; }
 lenv *get_env(lval *fn) { return fn->env; }
 lval *get_body(lval *fn) { return fn->body; }
+char *get_string(lval *l) { return l->str; }

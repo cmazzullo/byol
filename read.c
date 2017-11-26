@@ -1,6 +1,49 @@
 #include "read.h"
 #include <string.h>
 
+// Global definition for the parser
+mpc_parser_t *String, *Bool, *Num, *Symbol, *Exp, *Sexp, *Input;
+
+void
+read_initialize(void)
+{
+  extern mpc_parser_t *String;
+  extern mpc_parser_t *Bool;
+  extern mpc_parser_t *Num;
+  extern mpc_parser_t *Symbol;
+  extern mpc_parser_t *Exp;
+  extern mpc_parser_t *Sexp;
+  extern mpc_parser_t *Input;
+  Input = mpc_new("input");
+  String = mpc_new("string");
+  Bool = mpc_new("bool");
+  Num = mpc_new("num");
+  Symbol = mpc_new("symbol");
+  Exp = mpc_new("exp");
+  Sexp = mpc_new("sexp");
+
+  mpca_lang(MPCA_LANG_DEFAULT,"\
+  string : /\"(\\\\.|[^\"])*\"/ ;					\
+  bool : \"true\" | \"false\" ;						\
+  num : /-?[0-9]+/ ;							\
+  symbol : /[a-zA-Z0-9*+\\-\\/\\\\_=<>!&]+/ ;				\
+  sexp : '(' <exp>* ')' ;						\
+  exp : <string> | <bool> | <num> | <symbol> | <sexp> ; \
+  input : /^/ <exp>? /$/ ;", String, Bool, Num, Symbol, Sexp, Exp, Input);
+}
+
+void
+read_cleanup(void)
+{
+  extern mpc_parser_t *String;
+  extern mpc_parser_t *Bool;
+  extern mpc_parser_t *Num;
+  extern mpc_parser_t *Symbol;
+  extern mpc_parser_t *Exp;
+  extern mpc_parser_t *Sexp;
+  extern mpc_parser_t *Input;
+  mpc_cleanup(7, String, Bool, Num, Symbol, Sexp, Exp, Input);
+}
 
 lval *
 read_num(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
@@ -10,18 +53,20 @@ read_num(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
   else return lval_err("ERROR: Invalid number!");
 }
 
+
 lval *
-read_bool(mpc_ast_t *t)
+read_string(mpc_ast_t *t) // Convert an AST to an LVAL containing a number
 {
-  if (strcmp(t->contents, "true") == 0) {
-    return lval_bool(true);
-  } else {
-    return lval_bool(false);
-  }
+  t->contents[strlen(t->contents) - 1] = '\0'; // Cut off last quote
+  char *str = malloc(strlen(t->contents + 1) + 1);
+  strcpy(str, t->contents + 1);
+  lval *s = lval_string(str);
+  free(str);
+  return s;
 }
 
 lval *
-read_line(mpc_parser_t *Input, char *line)
+read_line(char *line)
 {
   mpc_result_t r;
   if (mpc_parse("<stdin>", line, Input, &r)) {
@@ -40,7 +85,8 @@ read(mpc_ast_t *t) // convert the AST into a sexp
   if (strcmp(t->tag, ">") == 0) {
     return read(t->children[1]);
   }
-  if (strstr(t->tag, "bool")) { return read_bool(t); }
+  if (strstr(t->tag, "bool")) { return lval_bool(strcmp(t->contents, "true") == 0); }
+  if (strstr(t->tag, "string")) { return read_string(t); }
   if (strstr(t->tag, "num")) { return read_num(t); }
   if (strstr(t->tag, "sym")) { return lval_sym(t->contents); }
 

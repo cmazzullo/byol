@@ -63,7 +63,5 @@ print_helper(list *l)
 void
 list_print(list *l)
 {
-  printf("[");
   print_helper(l);
-  printf("]");
 }

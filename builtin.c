@@ -3,6 +3,7 @@
  */
 
 #include "lval.h"
+#include "read.h"
 #include "list.h"
 #include "builtin.h"
 #include "structs.h"
@@ -41,6 +42,7 @@ env_add_builtins(lenv *e)
   env_add_builtin(e, "head", builtin_head, FUNCTION);
   env_add_builtin(e, "tail", builtin_tail, FUNCTION);
   env_add_builtin(e, "eval", builtin_eval, FUNCTION);
+  env_add_builtin(e, "read", builtin_read, FUNCTION);
   env_add_builtin(e, "cons", builtin_cons, FUNCTION);
   env_add_builtin(e, "=", builtin_equal, FUNCTION);
 
@@ -188,6 +190,16 @@ builtin_eval(lenv *e, lval *args)
   return lval_eval(e, lval_first(args));
 }
 
+/* Evaluate a string containing lisp code */
+lval *
+builtin_read(lenv *e, lval *args)
+{
+  ARGNUM(args, 1, "read");
+  lval *first = lval_first(args);
+  char *str = get_string(first);
+  lval *l = read_line(str);
+  return l;
+}
 
 /* Macro: if cond body else-body */
 lval *
@@ -209,7 +221,6 @@ builtin_if(lenv *e, lval *args)
   else {
     result = lval_eval(e, elsebody);
   }
-  lval_del(args);
   return result;
 }
 
@@ -226,6 +237,6 @@ builtin_def(lenv *e, lval *a)
   if (get_type(value) == LVAL_ERR) { return value; }
 
   //list *parent = list_first(list_rest(e));
-  lenv_set(e, name, lval_copy(value));
+  lenv_set(e, name, value);
   return lval_bool(true);
 }

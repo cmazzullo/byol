@@ -5,7 +5,8 @@
 #include "structs.h"
 
 enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXP,
-       LVAL_MACRO, LVAL_FN, LVAL_BOOL, LVAL_DICT };
+       LVAL_MACRO, LVAL_FN, LVAL_BOOL, LVAL_DICT,
+       LVAL_STRING };
 
 void lval_del(lval *v);
 lval *lval_copy(lval *v);
@@ -20,6 +21,7 @@ lval *lval_first(lval *l);
 lval *lval_rest(lval *l);
 lval *lval_cons(lval *v, lval *x);
 bool lval_equal(lval *x, lval *y);
+
 // Constructor
 
 lval *lval_sexp(void);
@@ -28,6 +30,7 @@ lval *lval_bool(bool x);
 lval *lval_dict(void);
 lval *lval_sym(char *sym);
 lval *lval_err(char *fmt, ...);
+lval *lval_string(char *str);
 
 lval *lval_lambda(lenv *e, lval *formals, lval *body);
 lval *lval_macro(lenv *e, lval *formals, lval *body);
@@ -55,7 +58,7 @@ lenv *get_env(lval *fn);
 lval *get_body(lval *fn);
 int get_count(lval *l);
 lval *lval_nth(lval *l, int n);
-
+char *get_string(lval *l);
 
 // MACROS ////////////////////////////////////////////////////////////////////////////////
 
