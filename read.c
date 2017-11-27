@@ -1,6 +1,6 @@
 #include "read.h"
 #include <string.h>
-
+#include "lval.h"
 // Global definition for the parser
 mpc_parser_t *String, *Bool, *Num, *Symbol, *Exp, *Sexp, *Input;
 
@@ -75,6 +75,20 @@ read_line(char *line)
     return lval_input;
   } else {
     return lval_err("ERROR: Syntax error!");
+  }
+}
+
+lval *
+read_file(char *fname)
+{
+  mpc_result_t r;
+  if (mpc_parse_contents(fname, Input, &r)) {
+    /* Read contents */
+    lval *expr = read(r.output);
+    mpc_ast_delete(r.output);
+    return expr;
+  } else {
+    return lval_err("ERROR: Load error!");
   }
 }
 

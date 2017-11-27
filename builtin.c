@@ -43,6 +43,7 @@ env_add_builtins(lenv *e)
   env_add_builtin(e, "tail", builtin_tail, FUNCTION);
   env_add_builtin(e, "eval", builtin_eval, FUNCTION);
   env_add_builtin(e, "read", builtin_read, FUNCTION);
+  env_add_builtin(e, "load", builtin_load, FUNCTION);
   env_add_builtin(e, "cons", builtin_cons, FUNCTION);
   env_add_builtin(e, "=", builtin_equal, FUNCTION);
 
@@ -198,6 +199,18 @@ builtin_read(lenv *e, lval *args)
   lval *first = lval_first(args);
   char *str = get_string(first);
   lval *l = read_line(str);
+  return l;
+}
+
+/* Read in and evaluate a file */
+lval *
+builtin_load(lenv *e, lval *args)
+{
+  ARGNUM(args, 1, "read");
+  lval *first = lval_first(args);
+  char *fname = get_string(first);
+  lval *l = read_file(fname);
+  //return lval_eval(e, l);
   return l;
 }
 

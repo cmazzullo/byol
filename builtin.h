@@ -5,6 +5,7 @@
 
 lval *builtin_eval(lenv *e, lval *args);
 lval *builtin_read(lenv *e, lval *args);
+lval *builtin_load(lenv *e, lval *args);
 lval *builtin_equal(lenv *e, lval *args);
 lval *builtin_list(lenv *e, lval *args);
 
