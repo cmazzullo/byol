@@ -4,6 +4,10 @@
 // Global definition for the parser
 mpc_parser_t *String, *Bool, *Num, *Symbol, *Exp, *Sexp, *Input;
 
+lval *read_num(mpc_ast_t *t);
+lval *read_bool(mpc_ast_t *t);
+lval *read(mpc_ast_t *t);
+
 void
 read_initialize(void)
 {

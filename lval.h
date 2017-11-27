@@ -37,7 +37,7 @@ lval *lval_macro(lenv *e, lval *formals, lval *body);
 lval *lval_builtin_function(lenv *e, lbuiltin fn);
 lval *lval_builtin_macro(lenv *e, lbuiltin fn);
 
-// Environment
+// Dict
 
 lval *lval_get(lval *d, lval *name);
 lval *lval_put(lval *d, lval *name, lval *v);
@@ -48,14 +48,9 @@ int get_num(lval *l);
 bool get_bool(lval *l);
 int get_count(lval *l);
 bool is_empty(lval *l);
-bool empty(lval *l);
-char *get_err(lval *l);
 char *get_sym(lval *l);
 int get_type(lval *l);
-lbuiltin get_builtin(lval *x);
-lval *get_formals(lval *fn);
 lenv *get_env(lval *fn);
-lval *get_body(lval *fn);
 int get_count(lval *l);
 lval *lval_nth(lval *l, int n);
 char *get_string(lval *l);

@@ -259,7 +259,7 @@ lval_equal(lval *x, lval *y)
     return get_num(x) == get_num(y);
     break;
   case LVAL_ERR:
-    return strcmp(get_err(x), get_err(y)) == 0;
+    return strcmp(x->err, y->err) == 0;
     break;
   case LVAL_SYM:
     return strcmp(get_sym(x), get_sym(y)) == 0;
@@ -276,11 +276,11 @@ lval_equal(lval *x, lval *y)
     break;
   case LVAL_MACRO:
   case LVAL_FN:
-    if (get_builtin(x) && get_builtin(y)) {
-      return get_builtin(x) == get_builtin(y);
-    } else if (!get_builtin(x) && !get_builtin(y)) {
-      return lval_equal(get_formals(x), get_formals(y)) &&
-	lval_equal(get_body(x), get_body(y));
+    if (x->builtin && y->builtin) {
+      return x->builtin == y->builtin;
+    } else if (!x->builtin && !y->builtin) {
+      return lval_equal(x->formals, y->formals) &&
+	lval_equal(x->body, y->body);
     } else {
       return false;
     }
@@ -375,18 +375,18 @@ lval_call(lenv *e, lval* fn, lval *args)
   //lenv *new_e = fn->env;
   lenv *new_e = lenv_new(fn->env);
   lval *formals = fn->formals;
-  while (!empty(args)) {
-    if (empty(formals)) {
+  while (!is_empty(args)) {
+    if (is_empty(formals)) {
       return lval_err("ERROR: Function passed too many arguments.");
     }
     lenv_set(new_e, lval_first(formals), lval_first(args));
     formals = lval_rest(formals);
     args = lval_rest(args);
   }
-  if (empty(formals)) {
-    return lval_eval(new_e, get_body(fn));
+  if (is_empty(formals)) {
+    return lval_eval(new_e, fn->body);
   } else { // this allows currying:
-    return lval_lambda(new_e, formals, get_body(fn));
+    return lval_lambda(new_e, formals, fn->body);
   }
 }
 
@@ -460,16 +460,9 @@ lval_put(lval *dict, lval *name, lval *v)
 
 int get_num(lval *l) {return l->num;}
 bool get_bool(lval *l) {return l->boolean;}
-char *get_err(lval *l) {return l->err;}
 char *get_sym(lval *l) {return l->sym;}
 int get_type(lval *l) {return l->type;}
 int get_count(lval *l){ return list_count(l->cell); }
 bool is_empty(lval *l){ return list_count(l->cell) == 0; }
-bool empty(lval *l) { return get_count(l) == 0; }
-
-lbuiltin get_builtin(lval *x) {return x->builtin;}
-
-lval *get_formals(lval *fn) { return fn->formals; }
 lenv *get_env(lval *fn) { return fn->env; }
-lval *get_body(lval *fn) { return fn->body; }
 char *get_string(lval *l) { return l->str; }
