@@ -37,6 +37,7 @@ env_add_builtins(lenv *e)
   env_add_builtin(e, "macro", builtin_macro, MACRO);
   env_add_builtin(e, "if", builtin_if, MACRO);
   env_add_builtin(e, "def", builtin_def, MACRO);
+  env_add_builtin(e, "progn", builtin_progn, MACRO);
 
   env_add_builtin(e, "list", builtin_list, FUNCTION);
   env_add_builtin(e, "head", builtin_head, FUNCTION);
@@ -144,6 +145,19 @@ lval *builtin_equal(lenv *e, lval *args) {
   return lval_bool(lval_equal(x, y));
 }
 
+
+lval *builtin_progn(lenv *e, lval *args) {
+  int count = get_count(args);
+  if (count == 0) { return lval_sexp(); }
+  lval *first = lval_first(args);
+  lval *result = lval_eval(e, first);
+  if (count == 1) {
+    return result;
+  } else {
+    return builtin_progn(e, lval_rest(args));
+  }
+}
+
 /* Operations on lists */
 // Takes one or more args, returns a sexp containing them:
 lval *builtin_list(lenv *e, lval *args) { return args; }
@@ -181,7 +195,10 @@ builtin_cons(lenv *e, lval *args)
   ARGNUM(args, 2, "cons");
   LASSERT(args, get_type(lval_first(lval_rest(args))) == LVAL_SEXP,
 	  "ERROR: Cons function requires a SEXP as a second argument");
-  return lval_cons(lval_rest(args), lval_first(args));
+  lval *x = lval_first(args);
+  lval *l = lval_nth(args, 1);
+  lval_cons(l, x);
+  return l;
 }
 
 lval *
