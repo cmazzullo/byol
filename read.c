@@ -1,8 +1,9 @@
 #include "read.h"
 #include <string.h>
 #include "lval.h"
+#include "mpc/mpc.h"
 // Global definition for the parser
-mpc_parser_t *String, *Bool, *Num, *Symbol, *Exp, *Sexp, *Input;
+mpc_parser_t *String, *Bool, *Num, *Symbol, *Exp, *Sexp, *Program;
 
 lval *read_num(mpc_ast_t *t);
 lval *read_bool(mpc_ast_t *t);
@@ -15,16 +16,16 @@ read_initialize(void)
   extern mpc_parser_t *Bool;
   extern mpc_parser_t *Num;
   extern mpc_parser_t *Symbol;
-  extern mpc_parser_t *Exp;
   extern mpc_parser_t *Sexp;
-  extern mpc_parser_t *Input;
-  Input = mpc_new("input");
+  extern mpc_parser_t *Exp;
+  extern mpc_parser_t *Program;
+  Program = mpc_new("program");
   String = mpc_new("string");
   Bool = mpc_new("bool");
   Num = mpc_new("num");
   Symbol = mpc_new("symbol");
-  Exp = mpc_new("exp");
   Sexp = mpc_new("sexp");
+  Exp = mpc_new("exp");
 
   mpca_lang(MPCA_LANG_DEFAULT,"\
   string : /\"(\\\\.|[^\"])*\"/ ;					\
@@ -33,7 +34,7 @@ read_initialize(void)
   symbol : /[a-zA-Z0-9*+\\-\\/\\\\_=<>!&]+/ ;				\
   sexp : '(' <exp>* ')' ;						\
   exp : <string> | <bool> | <num> | <symbol> | <sexp> ; \
-  input : /^/ <exp>? /$/ ;", String, Bool, Num, Symbol, Sexp, Exp, Input);
+  program : /^/ <exp>* /$/ ;", String, Bool, Num, Symbol, Sexp, Exp, Program);
 }
 
 void
@@ -43,10 +44,10 @@ read_cleanup(void)
   extern mpc_parser_t *Bool;
   extern mpc_parser_t *Num;
   extern mpc_parser_t *Symbol;
-  extern mpc_parser_t *Exp;
   extern mpc_parser_t *Sexp;
-  extern mpc_parser_t *Input;
-  mpc_cleanup(7, String, Bool, Num, Symbol, Sexp, Exp, Input);
+  extern mpc_parser_t *Exp;
+  extern mpc_parser_t *Program;
+  mpc_cleanup(7, String, Bool, Num, Symbol, Sexp, Exp, Program);
 }
 
 lval *
@@ -73,7 +74,7 @@ lval *
 read_line(char *line)
 {
   mpc_result_t r;
-  if (mpc_parse("<stdin>", line, Input, &r)) {
+  if (mpc_parse("<stdin>", line, Program, &r)) {
     lval *lval_input = read(r.output);
     mpc_ast_delete(r.output);
     return lval_input;
@@ -82,15 +83,25 @@ read_line(char *line)
   }
 }
 
+/* Read in any number of lisp expressions from a file and stuff them into a sexp */
 lval *
 read_file(char *fname)
 {
   mpc_result_t r;
-  if (mpc_parse_contents(fname, Input, &r)) {
+  if (mpc_parse_contents(fname, Program, &r)) {
     /* Read contents */
-    lval *expr = read(r.output);
+    mpc_ast_t *t = r.output;
+    lval *children;
+    if (strcmp(t->tag, ">") == 0) {
+      children = lval_sexp();
+      for (int i = t->children_num - 2; i >= 1; i--) {
+	lval *child = read(t->children[i]);
+	lval_cons(children, child);
+      }
+    }
+    lval_cons(children, lval_sym("progn"));
     mpc_ast_delete(r.output);
-    return expr;
+    return children;
   } else {
     return lval_err("ERROR: Load error!");
   }
@@ -99,9 +110,10 @@ read_file(char *fname)
 lval *
 read(mpc_ast_t *t) // convert the AST into a sexp
 {
-  // if the tree is the root, return its first child
+  // if the tree is the root, return its children as a list
   if (strcmp(t->tag, ">") == 0) {
-    return read(t->children[1]);
+    if (t->children_num > 1)
+      return read(t->children[1]);
   }
   if (strstr(t->tag, "bool")) { return lval_bool(strcmp(t->contents, "true") == 0); }
   if (strstr(t->tag, "string")) { return read_string(t); }

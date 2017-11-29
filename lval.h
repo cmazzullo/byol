@@ -16,11 +16,13 @@ void print_lval(lval *v);
 
 char *ltype_name(int t);
 lval *lval_eval(lenv *e, lval *v);
+bool lval_equal(lval *x, lval *y);
 
 lval *lval_first(lval *l);
 lval *lval_rest(lval *l);
+lval *lval_nth(lval *l, int n);
 lval *lval_cons(lval *v, lval *x);
-bool lval_equal(lval *x, lval *y);
+
 
 // Constructor
 
@@ -52,7 +54,6 @@ char *get_sym(lval *l);
 int get_type(lval *l);
 lenv *get_env(lval *fn);
 int get_count(lval *l);
-lval *lval_nth(lval *l, int n);
 char *get_string(lval *l);
 
 // MACROS ////////////////////////////////////////////////////////////////////////////////

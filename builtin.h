@@ -11,6 +11,7 @@ lval *builtin_def(lenv *e, lval *args);
 void env_add_builtins(lenv *e);
 
 lval *builtin_equal(lenv *e, lval *args);
+lval *builtin_progn(lenv *e, lval *args);
 
 lval *builtin_list(lenv *e, lval *args);
 lval *builtin_head(lenv *e, lval *args);
