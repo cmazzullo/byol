@@ -227,8 +227,7 @@ builtin_load(lenv *e, lval *args)
   lval *first = lval_first(args);
   char *fname = get_string(first);
   lval *l = read_file(fname);
-  //return lval_eval(e, l);
-  return l;
+  return lval_eval(e, l);
 }
 
 /* Macro: if cond body else-body */

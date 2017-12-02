@@ -35,6 +35,12 @@ main (int argc, char **argv)
   lenv *e = lenv_new(NULL); // Create the global environment
   env_add_builtins(e);
   read_initialize();
+
+  // Read in the standard library
+  lval *args = lval_sexp();
+  lval_cons(args, lval_string("stdlib.byol"));
+  builtin_load(e, args);
+
   run_repl(e);
   read_cleanup();
   lenv_delete(e);
